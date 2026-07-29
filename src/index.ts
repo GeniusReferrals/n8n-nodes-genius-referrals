@@ -2,6 +2,8 @@ export { GeniusReferralsApi } from './credentials/GeniusReferralsApi.credentials
 export {
   GENIUS_REFERRALS_API_CREDENTIAL_TYPE,
   buildGeniusReferralsRequestOptions,
+  createGeniusReferralsApiClient,
+  getGeniusReferralsApiCredentials,
   grApiRequest,
   grApiRequestWithAuthentication,
   isGeniusReferralsApiError,

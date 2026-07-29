@@ -1,21 +1,28 @@
 {
   "name": "n8n-nodes-genius-referrals",
   "version": "0.1.0",
-  "description": "Genius Referrals community node scaffold for n8n.",
+  "description": "n8n community node for the Genius Referrals API.",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "node -e \"console.log('Lint not configured yet; tracked in README scaffold notes.')\"",
+    "lint": "node -e \"console.log('Lint not configured yet; tracked in docs/release-readiness.md.')\"",
     "test": "npm run build && node --test test/**/*.test.cjs"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/GeniusReferrals/n8n-nodes-genius-referrals.git"
+  },
+  "homepage": "https://github.com/GeniusReferrals/n8n-nodes-genius-referrals#readme",
+  "bugs": {
+    "url": "https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues"
   },
   "keywords": [
     "n8n-community-node-package",
@@ -24,6 +31,9 @@
     "referrals"
   ],
   "author": "Genius Referrals",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "typescript": "^5.9.2"
   },

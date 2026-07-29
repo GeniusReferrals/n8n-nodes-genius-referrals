@@ -120,6 +120,13 @@ declare module 'n8n-workflow' {
     ): Promise<unknown>;
   }
 
+  export interface INodeExecutionData {
+    json: IDataObject;
+    pairedItem?: {
+      item: number;
+    };
+  }
+
   export interface ICredentialAccessorFunctions {
     getCredentials(name: string): Promise<ICredentialDataDecryptedObject>;
     helpers: IRequestHelperFunctions;
@@ -127,7 +134,14 @@ declare module 'n8n-workflow' {
 
   export interface ICredentialTestFunctions extends ICredentialAccessorFunctions {}
 
-  export interface IExecuteFunctions extends ICredentialAccessorFunctions {}
+  export interface IExecuteFunctions extends ICredentialAccessorFunctions {
+    continueOnFail(): boolean;
+    getInputData(): INodeExecutionData[];
+    getNode(): INode;
+    getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
+  }
 
-  export interface ILoadOptionsFunctions extends ICredentialAccessorFunctions {}
+  export interface ILoadOptionsFunctions extends ICredentialAccessorFunctions {
+    getCurrentNodeParameter(name: string): unknown;
+  }
 }

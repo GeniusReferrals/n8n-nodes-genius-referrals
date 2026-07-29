@@ -12,6 +12,8 @@ declare module 'n8n-workflow' {
     [key: string]: GenericValue;
   }
 
+  export interface JsonObject extends IDataObject {}
+
   export type IHttpRequestMethods = 'DELETE' | 'GET' | 'HEAD' | 'PATCH' | 'POST' | 'PUT';
 
   export interface IHttpRequestOptions {
@@ -78,6 +80,38 @@ declare module 'n8n-workflow' {
   }
 
   export interface ICredentialDataDecryptedObject extends IDataObject {}
+
+  export interface INodeCredentialsDetails {
+    id?: string | null;
+    name: string;
+  }
+
+  export interface INode {
+    id: string;
+    name: string;
+    type: string;
+    typeVersion: number;
+    position: [number, number];
+    parameters: IDataObject;
+    credentials?: Record<string, INodeCredentialsDetails>;
+    disabled?: boolean;
+  }
+
+  export interface NodeApiErrorOptions {
+    message?: string;
+    description?: string;
+    httpCode?: string;
+    runIndex?: number;
+    itemIndex?: number;
+  }
+
+  export class NodeApiError extends Error {
+    httpCode: string | null;
+    description?: string;
+    context: IDataObject;
+
+    constructor(node: INode, errorResponse: JsonObject, options?: NodeApiErrorOptions);
+  }
 
   export interface IRequestHelperFunctions {
     requestWithAuthentication(

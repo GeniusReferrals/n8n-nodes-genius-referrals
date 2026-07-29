@@ -7,13 +7,38 @@ const {
   createGeniusReferralsApiClient,
   getGeniusReferralsApiCredentials,
   grApiRequest,
+  grApiRequestAsNodeApiError,
   grApiRequestWithAuthentication,
+  grApiRequestWithAuthenticationAsNodeApiError,
   isGeniusReferralsApiError,
 } = require('../dist/index.js');
 const {
+  createGeniusReferralsNodeApiError,
   GeniusReferralsApiError,
   toGeniusReferralsApiError,
+  toGeniusReferralsNodeApiErrorResponse,
 } = require('../dist/lib/errors/GeniusReferralsApiError.js');
+
+const TEST_NODE = {
+  id: 'node-1',
+  name: 'Genius Referrals',
+  type: 'geniusReferrals',
+  typeVersion: 1,
+  position: [0, 0],
+  parameters: {},
+};
+
+class FakeNodeApiError extends Error {
+  constructor(node, errorResponse, options = {}) {
+    super(options.message ?? errorResponse.message);
+    this.name = 'NodeApiError';
+    this.node = node;
+    this.errorResponse = errorResponse;
+    this.options = options;
+    this.description = options.description;
+    this.httpCode = options.httpCode ?? null;
+  }
+}
 
 test('buildGeniusReferralsRequestOptions normalizes URL and JSON body headers', () => {
   const requestOptions = buildGeniusReferralsRequestOptions({
@@ -220,6 +245,148 @@ test('grApiRequest normalizes API validation details into GeniusReferralsApiErro
       return true;
     },
   );
+});
+
+test('toGeniusReferralsNodeApiErrorResponse preserves GR validation context for n8n errors', () => {
+  const errorResponse = toGeniusReferralsNodeApiErrorResponse(
+    {
+      response: {
+        statusCode: 422,
+        body: {
+          code: 'validation_error',
+          details: {
+            email: ['This field is required.'],
+          },
+          message: 'Invalid advocate payload',
+        },
+      },
+    },
+    {
+      method: 'POST',
+      url: 'https://api.geniusreferrals.com/advocates',
+    },
+  );
+
+  assert.equal(errorResponse.message, 'Invalid advocate payload');
+  assert.equal(errorResponse.httpCode, '422');
+  assert.match(errorResponse.description, /Validation details: email: This field is required\./);
+  assert.equal(errorResponse.response.data.code, 'validation_error');
+  assert.equal(errorResponse.response.data.endpoint, 'https://api.geniusreferrals.com/advocates');
+});
+
+test('createGeniusReferralsNodeApiError builds a NodeApiError-compatible object', () => {
+  const error = createGeniusReferralsNodeApiError(
+    FakeNodeApiError,
+    TEST_NODE,
+    {
+      response: {
+        statusCode: 422,
+        body: {
+          code: 'validation_error',
+          details: {
+            advocate: ['Email is required.'],
+          },
+          message: 'Invalid advocate payload',
+        },
+      },
+    },
+    {
+      method: 'POST',
+      url: 'https://api.geniusreferrals.com/advocates',
+    },
+  );
+
+  assert.equal(error instanceof FakeNodeApiError, true);
+  assert.equal(error.message, 'Invalid advocate payload');
+  assert.equal(error.httpCode, '422');
+  assert.equal(error.node, TEST_NODE);
+  assert.equal(error.errorResponse.response.data.code, 'validation_error');
+});
+
+test('grApiRequestAsNodeApiError wraps low-level request failures in a NodeApiError-compatible object', async () => {
+  await assert.rejects(
+    () =>
+      grApiRequestAsNodeApiError(
+        async () => {
+          throw {
+            response: {
+              statusCode: 422,
+              body: {
+                code: 'validation_error',
+                details: {
+                  advocate: ['Email is required.'],
+                },
+                message: 'Invalid advocate payload',
+              },
+            },
+          };
+        },
+        {
+          body: { advocate: {} },
+          endpoint: '/advocates',
+          method: 'POST',
+        },
+        {
+          node: TEST_NODE,
+          nodeApiErrorCtor: FakeNodeApiError,
+        },
+      ),
+    (error) => {
+      assert.equal(error instanceof FakeNodeApiError, true);
+      assert.equal(error.message, 'Invalid advocate payload');
+      assert.equal(error.httpCode, '422');
+      assert.match(error.description, /Request: POST https:\/\/api\.geniusreferrals\.com\/advocates/);
+
+      return true;
+    },
+  );
+});
+
+test('grApiRequestWithAuthenticationAsNodeApiError reuses the credential flow for n8n-facing errors', async () => {
+  const calls = [];
+
+  await assert.rejects(
+    () =>
+      grApiRequestWithAuthenticationAsNodeApiError(
+        async (credentialType, requestOptions) => {
+          calls.push({ credentialType, requestOptions });
+
+          throw {
+            response: {
+              statusCode: 404,
+              body: {
+                code: 'missing_resource',
+                message: 'Advocate was not found',
+              },
+            },
+          };
+        },
+        {
+          endpoint: '/advocates/123',
+          method: 'GET',
+        },
+        {
+          node: TEST_NODE,
+          nodeApiErrorCtor: FakeNodeApiError,
+          nodeApiErrorOptions: {
+            itemIndex: 2,
+          },
+        },
+      ),
+    (error) => {
+      assert.equal(error instanceof FakeNodeApiError, true);
+      assert.equal(error.message, 'Advocate was not found');
+      assert.equal(error.httpCode, '404');
+      assert.equal(error.options.itemIndex, 2);
+      assert.equal(error.errorResponse.response.data.code, 'missing_resource');
+
+      return true;
+    },
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].credentialType, GENIUS_REFERRALS_API_CREDENTIAL_TYPE);
+  assert.equal(calls[0].requestOptions.url, 'https://api.geniusreferrals.com/advocates/123');
 });
 
 test('toGeniusReferralsApiError falls back to transport error details when no API body exists', () => {

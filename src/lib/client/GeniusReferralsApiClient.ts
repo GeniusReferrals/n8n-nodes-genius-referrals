@@ -3,10 +3,14 @@ import type {
   IDataObject,
   IHttpRequestMethods,
   IHttpRequestOptions,
+  INode,
+  NodeApiErrorOptions,
 } from 'n8n-workflow';
 
 import {
+  createGeniusReferralsNodeApiError,
   GeniusReferralsApiError,
+  NodeApiErrorConstructor,
   toGeniusReferralsApiError,
 } from '../errors/GeniusReferralsApiError';
 
@@ -45,6 +49,13 @@ export type GeniusReferralsAuthenticatedRequestExecutor = (
   credentialType: string,
   requestOptions: IHttpRequestOptions,
 ) => Promise<unknown>;
+
+export interface GeniusReferralsNodeApiErrorContext<T extends Error = Error> {
+  node: INode;
+  nodeApiErrorCtor: NodeApiErrorConstructor<T>;
+  nodeApiErrorOptions?: NodeApiErrorOptions;
+}
+
 export const GENIUS_REFERRALS_API_CREDENTIAL_TYPE = 'geniusReferralsApi';
 
 export function buildGeniusReferralsRequestOptions(
@@ -85,6 +96,26 @@ export async function grApiRequest<T>(
   }
 }
 
+export async function grApiRequestAsNodeApiError<T, TError extends Error = Error>(
+  request: GeniusReferralsRequestExecutor,
+  options: GeniusReferralsRequestOptions,
+  errorContext: GeniusReferralsNodeApiErrorContext<TError>,
+): Promise<T> {
+  const requestOptions = buildGeniusReferralsRequestOptions(options);
+
+  try {
+    return (await request(requestOptions)) as T;
+  } catch (error) {
+    throw createGeniusReferralsNodeApiError(
+      errorContext.nodeApiErrorCtor,
+      errorContext.node,
+      error,
+      requestOptions,
+      errorContext.nodeApiErrorOptions,
+    );
+  }
+}
+
 export async function grApiRequestWithAuthentication<T>(
   requestWithAuthentication: GeniusReferralsAuthenticatedRequestExecutor,
   options: GeniusReferralsRequestOptions,
@@ -96,6 +127,30 @@ export async function grApiRequestWithAuthentication<T>(
     return (await requestWithAuthentication(credentialType, requestOptions)) as T;
   } catch (error) {
     throw toGeniusReferralsApiError(error, requestOptions);
+  }
+}
+
+export async function grApiRequestWithAuthenticationAsNodeApiError<
+  T,
+  TError extends Error = Error,
+>(
+  requestWithAuthentication: GeniusReferralsAuthenticatedRequestExecutor,
+  options: GeniusReferralsRequestOptions,
+  errorContext: GeniusReferralsNodeApiErrorContext<TError>,
+  credentialType = GENIUS_REFERRALS_API_CREDENTIAL_TYPE,
+): Promise<T> {
+  const requestOptions = buildGeniusReferralsRequestOptions(options);
+
+  try {
+    return (await requestWithAuthentication(credentialType, requestOptions)) as T;
+  } catch (error) {
+    throw createGeniusReferralsNodeApiError(
+      errorContext.nodeApiErrorCtor,
+      errorContext.node,
+      error,
+      requestOptions,
+      errorContext.nodeApiErrorOptions,
+    );
   }
 }
 

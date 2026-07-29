@@ -76,4 +76,24 @@ declare module 'n8n-workflow' {
     displayOptions?: Record<string, unknown>;
     [key: string]: unknown;
   }
+
+  export interface ICredentialDataDecryptedObject extends IDataObject {}
+
+  export interface IRequestHelperFunctions {
+    requestWithAuthentication(
+      credentialType: string,
+      requestOptions: IHttpRequestOptions,
+    ): Promise<unknown>;
+  }
+
+  export interface ICredentialAccessorFunctions {
+    getCredentials(name: string): Promise<ICredentialDataDecryptedObject>;
+    helpers: IRequestHelperFunctions;
+  }
+
+  export interface ICredentialTestFunctions extends ICredentialAccessorFunctions {}
+
+  export interface IExecuteFunctions extends ICredentialAccessorFunctions {}
+
+  export interface ILoadOptionsFunctions extends ICredentialAccessorFunctions {}
 }

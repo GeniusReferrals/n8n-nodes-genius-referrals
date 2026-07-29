@@ -1,4 +1,9 @@
-import type { IDataObject, IHttpRequestMethods, IHttpRequestOptions } from 'n8n-workflow';
+import type {
+  ICredentialDataDecryptedObject,
+  IDataObject,
+  IHttpRequestMethods,
+  IHttpRequestOptions,
+} from 'n8n-workflow';
 
 import {
   GeniusReferralsApiError,
@@ -16,6 +21,23 @@ export interface GeniusReferralsRequestOptions {
   method?: IHttpRequestMethods;
   qs?: IDataObject;
   returnFullResponse?: boolean;
+}
+
+export interface GeniusReferralsApiCredentials extends ICredentialDataDecryptedObject {
+  apiToken: string;
+  baseUrl?: string;
+}
+
+export interface GeniusReferralsApiRequestContext {
+  getCredentials(name: string): Promise<ICredentialDataDecryptedObject>;
+  helpers: {
+    requestWithAuthentication: GeniusReferralsAuthenticatedRequestExecutor;
+  };
+}
+
+export interface GeniusReferralsApiClient {
+  credentials: GeniusReferralsApiCredentials;
+  request<T>(options: GeniusReferralsRequestOptions): Promise<T>;
 }
 
 export type GeniusReferralsRequestExecutor = (requestOptions: IHttpRequestOptions) => Promise<unknown>;
@@ -81,9 +103,51 @@ export function isGeniusReferralsApiError(error: unknown): error is GeniusReferr
   return error instanceof GeniusReferralsApiError;
 }
 
+export async function getGeniusReferralsApiCredentials(
+  context: GeniusReferralsApiRequestContext,
+  credentialType = GENIUS_REFERRALS_API_CREDENTIAL_TYPE,
+): Promise<GeniusReferralsApiCredentials> {
+  const credentials = await context.getCredentials(credentialType);
+
+  return {
+    ...credentials,
+    baseUrl: resolveBaseUrl(credentials.baseUrl),
+  } as GeniusReferralsApiCredentials;
+}
+
+export async function createGeniusReferralsApiClient(
+  context: GeniusReferralsApiRequestContext,
+  credentialType = GENIUS_REFERRALS_API_CREDENTIAL_TYPE,
+): Promise<GeniusReferralsApiClient> {
+  const credentials = await getGeniusReferralsApiCredentials(context, credentialType);
+
+  return {
+    credentials,
+    request: async <T>(options: GeniusReferralsRequestOptions) =>
+      grApiRequestWithAuthentication<T>(
+        context.helpers.requestWithAuthentication.bind(context.helpers),
+        {
+          ...options,
+          baseUrl: options.baseUrl ?? credentials.baseUrl,
+        },
+        credentialType,
+      ),
+  };
+}
+
 function joinBaseUrlAndEndpoint(baseUrl: string, endpoint: string): string {
   const trimmedBaseUrl = baseUrl.replace(/\/+$/, '');
   const trimmedEndpoint = endpoint.replace(/^\/+/, '');
 
   return trimmedEndpoint === '' ? trimmedBaseUrl : `${trimmedBaseUrl}/${trimmedEndpoint}`;
+}
+
+function resolveBaseUrl(baseUrl: unknown): string {
+  if (typeof baseUrl !== 'string') {
+    return DEFAULT_BASE_URL;
+  }
+
+  const trimmedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+
+  return trimmedBaseUrl === '' ? DEFAULT_BASE_URL : trimmedBaseUrl;
 }

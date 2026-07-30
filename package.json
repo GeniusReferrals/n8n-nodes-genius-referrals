@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "node -e \"console.log('Lint not configured yet; tracked in README scaffold notes.')\""
+    "lint": "node -e \"console.log('Lint not configured yet; tracked in README scaffold notes.')\"",
+    "test": "npm run build && node test/run-tests.cjs"
   },
   "repository": {
     "type": "git",

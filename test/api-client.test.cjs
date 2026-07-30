@@ -11,7 +11,7 @@ const {
   grApiRequestWithAuthentication,
   grApiRequestWithAuthenticationAsNodeApiError,
   isGeniusReferralsApiError,
-} = require('../dist/index.js');
+} = require('../dist/lib/client/GeniusReferralsApiClient.js');
 const {
   createGeniusReferralsNodeApiError,
   GeniusReferralsApiError,

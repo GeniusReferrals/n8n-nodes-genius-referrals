@@ -9,11 +9,17 @@
     "dist",
     "README.md",
     "LICENSE",
-    "docs"
+    "docs",
+    "icons"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "node -e \"console.log('Lint not configured yet; tracked in docs/release-readiness.md.')\"",
+    "lint": "n8n-node lint",
+    "release:prepare": "node scripts/verify-approved-release.cjs --manifest release-manifest.json",
+    "release:verify-approved": "node scripts/verify-approved-release.cjs --manifest release-manifest.json",
+    "release:verify-artifact": "node scripts/verify-prepared-artifact.cjs --manifest release-manifest.json",
+    "release:verify-approval": "node scripts/verify-production-approval.cjs --manifest release-manifest.json",
+    "release:verify-published": "node scripts/verify-published-package.cjs --manifest release-manifest.json",
     "test": "npm run build && node test/run-tests.cjs"
   },
   "repository": {
@@ -30,14 +36,18 @@
     "genius-referrals",
     "referrals"
   ],
-  "author": "Genius Referrals",
+  "author": {
+    "name": "Genius Referrals",
+    "email": "support@geniusreferrals.com"
+  },
   "publishConfig": {
     "access": "public"
   },
   "peerDependencies": {
-    "n8n-workflow": ">=2.28.0 <2.32.0"
+    "n8n-workflow": "*"
   },
   "devDependencies": {
+    "@n8n/node-cli": "^0.41.2",
     "typescript": "^5.9.2"
   },
   "n8n": {

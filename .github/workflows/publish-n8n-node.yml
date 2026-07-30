@@ -1,0 +1,291 @@
+name: Publish n8n Node
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish-n8n-node.yml'
+      - 'release-manifest.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'eslint.config.mjs'
+      - 'scripts/**'
+      - 'src/**'
+      - 'test/**'
+  workflow_dispatch:
+    inputs:
+      release_action:
+        description: 'Release phase to run'
+        required: true
+        default: 'prepare'
+        type: choice
+        options:
+          - prepare
+          - publish
+      release_manifest_path:
+        description: 'Path to the approved release manifest in this repository'
+        required: true
+        default: 'release-manifest.json'
+      approval_comment_id:
+        description: 'GitHub issue comment ID containing Alain structured production approval'
+        required: false
+      prepared_run_id:
+        description: 'GitHub Actions run ID that prepared the approved tarball'
+        required: false
+      prepared_artifact_id:
+        description: 'GitHub Actions artifact ID for the approved tarball'
+        required: false
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  issues: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '24'
+  MIN_NPM_VERSION: '11.5.1'
+  RELEASE_ACTION: ${{ inputs.release_action || 'prepare' }}
+  RELEASE_MANIFEST_PATH: ${{ inputs.release_manifest_path || 'release-manifest.json' }}
+  APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id || '' }}
+  PREPARED_RUN_ID: ${{ inputs.prepared_run_id || '' }}
+  PREPARED_ARTIFACT_ID: ${{ inputs.prepared_artifact_id || '' }}
+
+jobs:
+  prepare-release:
+    name: Prepare canonical release tarball
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' || inputs.release_action == 'prepare' }}
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      run_id: ${{ github.run_id }}
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set supported npm version
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global "npm@${MIN_NPM_VERSION}"
+          node --version
+          npm --version
+
+      - name: Install release automation dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --include=dev
+
+      - name: Prepare approved release tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-approved-release.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --pack-destination "$RUNNER_TEMP/release-package" \
+            --summary-file "$RUNNER_TEMP/release-package/release-preparation.json"
+
+      - name: Upload prepared package artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepared-release-package
+          path: ${{ runner.temp }}/release-package
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Record preparation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### Release preparation"
+            echo ""
+            echo "- Manifest: $RELEASE_MANIFEST_PATH"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Artifact ID: ${{ steps.upload.outputs.artifact-id }}"
+            echo "- npm publish: dry-run only"
+            echo "- npm credentials present: no"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-release:
+    name: Publish exact prepared tarball
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_action == 'publish' }}
+    environment: npm-production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Set supported npm version
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global "npm@${MIN_NPM_VERSION}"
+          node --version
+          npm --version
+
+      - name: Install release automation dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --include=dev
+
+      - name: Refuse incomplete publication dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$APPROVAL_COMMENT_ID" in ''|*[!0-9]*) echo "approval_comment_id must be numeric" >&2; exit 1;; esac
+          case "$PREPARED_RUN_ID" in ''|*[!0-9]*) echo "prepared_run_id must be numeric" >&2; exit 1;; esac
+          case "$PREPARED_ARTIFACT_ID" in ''|*[!0-9]*) echo "prepared_artifact_id must be numeric" >&2; exit 1;; esac
+
+      - name: Verify Alain production approval
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_WORKFLOW_COMMIT="$(git log -n 1 --format=%H -- .github/workflows/publish-n8n-node.yml scripts)"
+          node scripts/verify-production-approval.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --comment-id "$APPROVAL_COMMENT_ID" \
+            --prepared-run-id "$PREPARED_RUN_ID" \
+            --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --current-workflow-commit "$RELEASE_WORKFLOW_COMMIT" \
+            --summary-file "$RUNNER_TEMP/approval-gate.json"
+
+      - name: Download approved prepared artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ env.PREPARED_ARTIFACT_ID }}
+          run-id: ${{ env.PREPARED_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/approved-package
+
+      - name: Verify exact prepared artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-prepared-artifact.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --artifact-dir "$RUNNER_TEMP/approved-package" \
+            --prepared-run-id "$PREPARED_RUN_ID" \
+            --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --summary-file "$RUNNER_TEMP/prepared-artifact.json"
+
+      - name: Check registry idempotency
+        id: registry_before
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-published-package.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --allow-missing \
+            --summary-file "$RUNNER_TEMP/registry-before.json"
+          status="$(node -e "process.stdout.write(require(process.env.RUNNER_TEMP + '/registry-before.json').status)")"
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+
+      - name: Record idempotent success
+        if: ${{ steps.registry_before.outputs.status == 'published' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/record-publication-evidence.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --status "SKIPPED_ALREADY_PUBLISHED" \
+            --approval-comment-id "$APPROVAL_COMMENT_ID" \
+            --prepared-run-id "$PREPARED_RUN_ID" \
+            --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --prepared-artifact-summary-file "$RUNNER_TEMP/prepared-artifact.json" \
+            --registry-summary-file "$RUNNER_TEMP/registry-before.json" \
+            --summary-file "$RUNNER_TEMP/publication-evidence.json"
+          {
+            echo "### n8n package publication"
+            echo ""
+            echo "Version already exists with the manifest checksum. Publication skipped."
+            echo "- Manifest: $RELEASE_MANIFEST_PATH"
+            echo "- Prepared run ID: $PREPARED_RUN_ID"
+            echo "- Prepared artifact ID: $PREPARED_ARTIFACT_ID"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish exact tarball with provenance
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is not configured in the npm-production environment" >&2
+            exit 1
+          fi
+          tarball="$(find "$RUNNER_TEMP/approved-package" -type f -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "Approved prepared tarball is missing" >&2
+            exit 1
+          fi
+          npm publish "$tarball" --access public --provenance
+
+      - name: Verify published package
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/verify-published-package.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --summary-file "$RUNNER_TEMP/registry-after.json"
+
+      - name: Record publication evidence
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/record-publication-evidence.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --status "PUBLISHED" \
+            --approval-comment-id "$APPROVAL_COMMENT_ID" \
+            --prepared-run-id "$PREPARED_RUN_ID" \
+            --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --prepared-artifact-summary-file "$RUNNER_TEMP/prepared-artifact.json" \
+            --registry-summary-file "$RUNNER_TEMP/registry-after.json" \
+            --summary-file "$RUNNER_TEMP/publication-evidence.json"
+          {
+            echo "### n8n package publication"
+            echo ""
+            echo "- Manifest: $RELEASE_MANIFEST_PATH"
+            echo "- Approval comment ID: $APPROVAL_COMMENT_ID"
+            echo "- Prepared run ID: $PREPARED_RUN_ID"
+            echo "- Prepared artifact ID: $PREPARED_ARTIFACT_ID"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Registry verification: PASS"
+            echo "- Provenance: requested with npm publish --provenance; see npm registry attestation metadata when available"
+          } >> "$GITHUB_STEP_SUMMARY"

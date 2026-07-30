@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "package": {
+    "name": "n8n-nodes-genius-referrals",
+    "version": "0.1.0"
+  },
+  "source": {
+    "commit": "dbc6b2d8303e21afa971e729274c5c125290a6a8"
+  },
+  "release": {
+    "finalWorkflowCommit": "23d6aed6891963318d75498aef04059063c9727d"
+  },
+  "artifact": {
+    "sha256": "dc3ebca69652c7e0c1f306f0c24202e593081f77bdbb60bd2e3488481981a936",
+    "sha512": "sha512-DKPL24IXsDa8AHrpUb3IIBtrAdupcHLEUHFBRzuYPYCCLU02bxQDDTfkonTKHYfWefbY1IsGN40F0YpPU1mjIg=="
+  },
+  "approval": {
+    "repository": "GeniusReferrals/n8n-nodes-genius-referrals",
+    "issueNumber": 1,
+    "requiredAuthor": "alainhl",
+    "requiredMarker": "[ProductionApproval]",
+    "requiredDecision": "APPROVED",
+    "requiredAuthorizedAction": "npm publication"
+  },
+  "publication": {
+    "evidenceIssueNumber": 15,
+    "environment": "npm-production",
+    "secretName": "NPM_TOKEN",
+    "provenance": true
+  }
+}

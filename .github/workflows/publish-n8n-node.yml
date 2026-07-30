@@ -1,0 +1,212 @@
+name: Publish n8n Node
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Approved npm package name'
+        required: true
+        default: 'n8n-nodes-genius-referrals'
+      version:
+        description: 'Approved npm package version'
+        required: true
+        default: '0.1.0'
+      commit:
+        description: 'Approved source commit to package'
+        required: true
+        default: '54d7cb816186d849acf2056bc35d081424f17565'
+      sha256:
+        description: 'Approved package SHA-256'
+        required: true
+        default: '71128f5b942cd67777c29576a87a0160e67801ed0ee21f937d904d59d36a95e5'
+      publish_mode:
+        description: 'Run dry-run validation or publish through the protected environment'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+          - dry-run
+          - real
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-n8n-nodes-genius-referrals-0.1.0
+  cancel-in-progress: false
+
+env:
+  APPROVED_PACKAGE_NAME: n8n-nodes-genius-referrals
+  APPROVED_VERSION: 0.1.0
+  APPROVED_COMMIT: 54d7cb816186d849acf2056bc35d081424f17565
+  APPROVED_SHA256: 71128f5b942cd67777c29576a87a0160e67801ed0ee21f937d904d59d36a95e5
+  APPROVAL_COMMENT_ID: '5132426865'
+  NODE_VERSION: '22'
+
+jobs:
+  validate-release:
+    name: Validate approved artifact
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.identity.outputs.package_name }}
+      version: ${{ steps.identity.outputs.version }}
+      commit: ${{ steps.identity.outputs.commit }}
+      sha256: ${{ steps.identity.outputs.sha256 }}
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Refuse unapproved release identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.package_name }}" = "$APPROVED_PACKAGE_NAME"
+          test "${{ inputs.version }}" = "$APPROVED_VERSION"
+          test "${{ inputs.commit }}" = "$APPROVED_COMMIT"
+          test "${{ inputs.sha256 }}" = "$APPROVED_SHA256"
+          printf 'package_name=%s\n' "$APPROVED_PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$APPROVED_VERSION" >> "$GITHUB_OUTPUT"
+          printf 'commit=%s\n' "$APPROVED_COMMIT" >> "$GITHUB_OUTPUT"
+          printf 'sha256=%s\n' "$APPROVED_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Verify accepted production approval record
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          approval_body="$(
+            curl -fsSL \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/GeniusReferrals/n8n-nodes-genius-referrals/issues/comments/$APPROVAL_COMMENT_ID" \
+              | jq -r '.body'
+          )"
+          grep -F '[ProductionApprovalAccepted]' <<< "$approval_body"
+          grep -F "Artifact=$APPROVED_PACKAGE_NAME" <<< "$approval_body"
+          grep -F "Version=$APPROVED_VERSION" <<< "$approval_body"
+          grep -F "Commit=$APPROVED_COMMIT" <<< "$approval_body"
+          grep -F "PackageSHA256=$APPROVED_SHA256" <<< "$approval_body"
+          grep -F 'ApprovedBy=alainhl' <<< "$approval_body"
+
+      - name: Build, test, pack, dry-run publish, and verify SHA
+        run: |
+          node scripts/verify-approved-release.cjs \
+            --package-name "${{ steps.identity.outputs.package_name }}" \
+            --version "${{ steps.identity.outputs.version }}" \
+            --commit "${{ steps.identity.outputs.commit }}" \
+            --sha256 "${{ steps.identity.outputs.sha256 }}" \
+            --pack-destination "$RUNNER_TEMP/release-pack" \
+            --summary-file "$RUNNER_TEMP/release-verification.json"
+
+      - name: Upload verified package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: approved-n8n-node-package
+          path: |
+            ${{ runner.temp }}/release-pack/*.tgz
+            ${{ runner.temp }}/release-verification.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    name: Publish from protected environment
+    runs-on: ubuntu-latest
+    needs: validate-release
+    if: ${{ inputs.publish_mode == 'real' }}
+    environment: npm-production
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download verified package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: approved-n8n-node-package
+          path: ${{ runner.temp }}/approved-package
+
+      - name: Check registry idempotency
+        id: registry_before
+        run: |
+          set -euo pipefail
+          node scripts/verify-published-package.cjs \
+            --package-name "${{ needs.validate-release.outputs.package_name }}" \
+            --version "${{ needs.validate-release.outputs.version }}" \
+            --sha256 "${{ needs.validate-release.outputs.sha256 }}" \
+            --allow-missing \
+            --summary-file "$RUNNER_TEMP/registry-before.json"
+          status="$(node -e "process.stdout.write(require(process.env.RUNNER_TEMP + '/registry-before.json').status)")"
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+
+      - name: Record idempotent success
+        if: ${{ steps.registry_before.outputs.status == 'published' }}
+        run: |
+          {
+            echo "### n8n package publication"
+            echo ""
+            echo "Version already exists with approved checksum. Publication skipped."
+            echo "- Package: ${{ needs.validate-release.outputs.package_name }}"
+            echo "- Version: ${{ needs.validate-release.outputs.version }}"
+            echo "- Commit: ${{ needs.validate-release.outputs.commit }}"
+            echo "- SHA-256: ${{ needs.validate-release.outputs.sha256 }}"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish with provenance
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          tarball="$(find "$RUNNER_TEMP/approved-package" -maxdepth 1 -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "Verified package artifact is missing" >&2
+            exit 1
+          fi
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is not configured in the npm-production environment" >&2
+            exit 1
+          fi
+          npm publish "$tarball" --access public --provenance
+
+      - name: Verify published package
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        run: |
+          node scripts/verify-published-package.cjs \
+            --package-name "${{ needs.validate-release.outputs.package_name }}" \
+            --version "${{ needs.validate-release.outputs.version }}" \
+            --sha256 "${{ needs.validate-release.outputs.sha256 }}" \
+            --summary-file "$RUNNER_TEMP/registry-after.json"
+
+      - name: Record publication evidence
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        run: |
+          {
+            echo "### n8n package publication"
+            echo ""
+            echo "- Package: ${{ needs.validate-release.outputs.package_name }}"
+            echo "- Version: ${{ needs.validate-release.outputs.version }}"
+            echo "- Approved commit: ${{ needs.validate-release.outputs.commit }}"
+            echo "- Package SHA-256: ${{ needs.validate-release.outputs.sha256 }}"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Registry verification: PASS"
+            echo "- Provenance: requested with npm publish --provenance; see npm registry attestation metadata when available"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,7 @@ const {
   assertNoNpmTokenEnv,
   assertPublishTokenForMode,
   assertSupportedToolchain,
+  buildPublicationEvidence,
   classifyRegistryVersion,
   readReleaseManifest,
   sha256File,
@@ -30,6 +31,7 @@ function approvalComment(overrides = {}) {
       `Package=${manifest.package.name}`,
       `Version=${manifest.package.version}`,
       `Commit=${manifest.source.commit}`,
+      `FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`,
       `PackageSHA256=${manifest.artifact.sha256}`,
       'AuthorizedActions=npm publication',
       'PreparedRunID=987654',
@@ -78,10 +80,46 @@ test('approval gate requires actual alainhl GitHub author and structured fields'
     preparedRunId: '987654',
     preparedArtifactId: '24680',
     issueComments: [],
+    currentWorkflowCommit: manifest.release.finalWorkflowCommit,
   });
 
   assert.equal(summary.approvalAuthor, 'alainhl');
   assert.equal(summary.fields.Decision, 'APPROVED');
+});
+
+test('approval gate rejects missing or mismatched release workflow commit', () => {
+  assert.throws(
+    () =>
+      verifyApprovalComment({
+        approvalComment: approvalComment({
+          body: approvalComment().body.replace(
+            `FinalReleaseCommit=${manifest.release.finalWorkflowCommit}\n`,
+            '',
+          ),
+        }),
+        manifest,
+        expectedCommentId: '123456',
+        preparedRunId: '987654',
+        preparedArtifactId: '24680',
+        issueComments: [],
+        currentWorkflowCommit: manifest.release.finalWorkflowCommit,
+      }),
+    /Approval FinalReleaseCommit mismatch/,
+  );
+
+  assert.throws(
+    () =>
+      verifyApprovalComment({
+        approvalComment: approvalComment(),
+        manifest,
+        expectedCommentId: '123456',
+        preparedRunId: '987654',
+        preparedArtifactId: '24680',
+        issueComments: [],
+        currentWorkflowCommit: '0000000000000000000000000000000000000000',
+      }),
+    /Release workflow commit mismatch/,
+  );
 });
 
 test('approval gate rejects bot comment that only claims ApprovedBy=alainhl', () => {
@@ -120,6 +158,7 @@ test('approval gate rejects prepared artifact reuse for a different release', ()
               'Package=other-package',
               `Version=${manifest.package.version}`,
               `Commit=${manifest.source.commit}`,
+              'FinalReleaseCommit=0000000000000000000000000000000000000000',
               `PackageSHA256=${manifest.artifact.sha256}`,
               'PreparedRunID=987654',
               'PreparedArtifactID=24680',
@@ -129,6 +168,45 @@ test('approval gate rejects prepared artifact reuse for a different release', ()
       }),
     /already consumed for a different release/,
   );
+});
+
+test('publication evidence includes durable release identity and registry provenance fields', () => {
+  const evidence = buildPublicationEvidence({
+    manifest,
+    status: 'PUBLISHED',
+    preparedRunId: '987654',
+    preparedArtifactId: '24680',
+    approvalCommentId: '123456',
+    workflowRunId: '112233',
+    workflowRunAttempt: '1',
+    workflowUrl: 'https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/actions/runs/112233',
+    manifestCommit: '1234567890abcdef1234567890abcdef12345678',
+    registrySummary: {
+      status: 'published',
+      dist: {
+        integrity: manifest.artifact.sha512,
+        tarball: 'https://registry.npmjs.org/n8n-nodes-genius-referrals/-/n8n-nodes-genius-referrals-0.1.0.tgz',
+        attestations: { url: 'https://registry.npmjs.org/-/npm/v1/attestations/n8n-nodes-genius-referrals@0.1.0' },
+      },
+      tarball: {
+        sha256: manifest.artifact.sha256,
+      },
+    },
+  });
+
+  assert.match(evidence, /^\[PublicationEvidence\]/);
+  assert.match(evidence, new RegExp(`Package=${manifest.package.name}`));
+  assert.match(evidence, new RegExp(`Version=${manifest.package.version}`));
+  assert.match(evidence, /ManifestCommit=1234567890abcdef1234567890abcdef12345678/);
+  assert.match(evidence, new RegExp(`FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`));
+  assert.match(evidence, new RegExp(`ReleaseWorkflowCommit=${manifest.release.finalWorkflowCommit}`));
+  assert.match(evidence, new RegExp(`PackageSHA256=${manifest.artifact.sha256}`));
+  assert.match(evidence, /PreparedRunID=987654/);
+  assert.match(evidence, /PreparedArtifactID=24680/);
+  assert.match(evidence, /WorkflowURL=https:\/\/github\.com\/GeniusReferrals\/n8n-nodes-genius-referrals\/actions\/runs\/112233/);
+  assert.match(evidence, /RegistryIntegrity=sha512-/);
+  assert.match(evidence, /Provenance=requested; registryAttestations=/);
+  assert.match(evidence, /IdempotentSkip=FALSE/);
 });
 
 test('unsupported npm versions fail closed', () => {

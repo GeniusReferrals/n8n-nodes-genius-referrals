@@ -88,6 +88,7 @@ function main() {
     manifestPath: manifest.manifestPath,
     package: manifest.package,
     source: manifest.source,
+    release: manifest.release,
     preparedRunId: options.preparedRunId ?? null,
     preparedArtifactId: options.preparedArtifactId ?? null,
     tarball: {

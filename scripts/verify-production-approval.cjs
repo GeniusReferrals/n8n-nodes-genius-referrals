@@ -15,6 +15,7 @@ function parseArgs(argv) {
     commentId: null,
     preparedRunId: null,
     preparedArtifactId: null,
+    currentWorkflowCommit: process.env.GITHUB_SHA || null,
     summaryFile: null,
   };
 
@@ -37,6 +38,8 @@ function parseArgs(argv) {
       options.preparedRunId = next();
     } else if (arg === '--prepared-artifact-id') {
       options.preparedArtifactId = next();
+    } else if (arg === '--current-workflow-commit') {
+      options.currentWorkflowCommit = next();
     } else if (arg === '--summary-file') {
       options.summaryFile = resolve(next());
     } else {
@@ -105,7 +108,7 @@ async function main() {
     token,
   );
   const issueComments = await githubGetJson(
-    `/repos/${manifest.approval.repository}/issues/${manifest.approval.issueNumber}/comments?per_page=100`,
+    `/repos/${manifest.approval.repository}/issues/${manifest.publication.evidenceIssueNumber}/comments?per_page=100`,
     token,
   );
 
@@ -115,6 +118,7 @@ async function main() {
     expectedCommentId: options.commentId,
     preparedRunId: options.preparedRunId,
     preparedArtifactId: options.preparedArtifactId,
+    currentWorkflowCommit: options.currentWorkflowCommit,
     issueComments,
   });
 
@@ -123,6 +127,8 @@ async function main() {
     manifestPath: manifest.manifestPath,
     package: manifest.package,
     source: manifest.source,
+    release: manifest.release,
+    currentWorkflowCommit: options.currentWorkflowCommit,
     preparedRunId: options.preparedRunId,
     preparedArtifactId: options.preparedArtifactId,
     approval: summary,

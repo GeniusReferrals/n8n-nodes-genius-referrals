@@ -46,6 +46,9 @@ function readReleaseManifest(manifestPath) {
     source: {
       commit: requireString(manifest.source?.commit, 'source.commit'),
     },
+    release: {
+      finalWorkflowCommit: requireString(manifest.release?.finalWorkflowCommit, 'release.finalWorkflowCommit'),
+    },
     artifact: {
       sha256: requireString(manifest.artifact?.sha256, 'artifact.sha256').toLowerCase(),
       sha512: manifest.artifact?.sha512 === null || manifest.artifact?.sha512 === undefined
@@ -64,6 +67,7 @@ function readReleaseManifest(manifestPath) {
       ),
     },
     publication: {
+      evidenceIssueNumber: requireInteger(manifest.publication?.evidenceIssueNumber, 'publication.evidenceIssueNumber'),
       environment: requireString(manifest.publication?.environment, 'publication.environment'),
       secretName: requireString(manifest.publication?.secretName, 'publication.secretName'),
       provenance: manifest.publication?.provenance === true,
@@ -77,6 +81,10 @@ function readReleaseManifest(manifestPath) {
 
   if (!/^[0-9a-f]{40}$/i.test(normalized.source.commit)) {
     throw new Error('source.commit must be a full 40-character Git SHA');
+  }
+
+  if (!/^[0-9a-f]{40}$/i.test(normalized.release.finalWorkflowCommit)) {
+    throw new Error('release.finalWorkflowCommit must be a full 40-character Git SHA');
   }
 
   if (!/^[0-9a-f]{64}$/i.test(normalized.artifact.sha256)) {
@@ -210,6 +218,10 @@ function assertIssueUrlMatches(issueUrl, manifest) {
   }
 }
 
+function normalizeHexField(value) {
+  return typeof value === 'string' ? value.toLowerCase() : value;
+}
+
 function assertPreparedArtifactNotConsumedForDifferentRelease(comments, manifest, preparedRunId, preparedArtifactId) {
   if (!preparedRunId || !preparedArtifactId) {
     return;
@@ -232,8 +244,10 @@ function assertPreparedArtifactNotConsumedForDifferentRelease(comments, manifest
     const sameRelease =
       fieldValue(fields, ['Package']) === manifest.package.name &&
       fieldValue(fields, ['Version']) === manifest.package.version &&
-      fieldValue(fields, ['Commit']) === manifest.source.commit &&
-      fieldValue(fields, ['PackageSHA256', 'SHA256'])?.toLowerCase() === manifest.artifact.sha256;
+      normalizeHexField(fieldValue(fields, ['Commit', 'ManifestCommit', 'SourceCommit'])) === manifest.source.commit &&
+      normalizeHexField(fieldValue(fields, ['FinalReleaseCommit', 'ReleaseWorkflowCommit', 'FinalWorkflowCommit', 'WorkflowCommit'])) ===
+        manifest.release.finalWorkflowCommit &&
+      normalizeHexField(fieldValue(fields, ['PackageSHA256', 'SHA256'])) === manifest.artifact.sha256;
 
     if (!sameRelease) {
       throw new Error(
@@ -249,6 +263,7 @@ function verifyApprovalComment({
   expectedCommentId,
   preparedRunId,
   preparedArtifactId,
+  currentWorkflowCommit,
   issueComments = [],
 }) {
   if (expectedCommentId && String(approvalComment.id) !== String(expectedCommentId)) {
@@ -274,16 +289,25 @@ function verifyApprovalComment({
     ['Package', manifest.package.name],
     ['Version', manifest.package.version],
     ['Commit', manifest.source.commit],
+    ['FinalReleaseCommit', manifest.release.finalWorkflowCommit],
     ['PackageSHA256', manifest.artifact.sha256],
   ];
 
   for (const [field, expected] of checks) {
     const actual = fields[field];
-    const normalizedActual = field === 'PackageSHA256' && actual ? actual.toLowerCase() : actual;
+    const normalizedActual = ['Commit', 'FinalReleaseCommit', 'PackageSHA256'].includes(field)
+      ? normalizeHexField(actual)
+      : actual;
 
     if (normalizedActual !== expected) {
       throw new Error(`Approval ${field} mismatch. Expected ${expected}, got ${actual ?? 'missing'}`);
     }
+  }
+
+  if (currentWorkflowCommit && normalizeHexField(currentWorkflowCommit) !== manifest.release.finalWorkflowCommit) {
+    throw new Error(
+      `Release workflow commit mismatch. Expected ${manifest.release.finalWorkflowCommit}, got ${currentWorkflowCommit}`,
+    );
   }
 
   if (!actionListIncludes(fields.AuthorizedActions, manifest.approval.requiredAuthorizedAction)) {
@@ -403,6 +427,57 @@ function verifyPreparedArtifact({
   };
 }
 
+function buildPublicationEvidence({
+  manifest,
+  status,
+  preparedRunId,
+  preparedArtifactId,
+  approvalCommentId,
+  workflowRunId,
+  workflowRunAttempt,
+  workflowUrl,
+  manifestCommit,
+  registrySummary = null,
+  preparedArtifactSummary = null,
+}) {
+  const registryIntegrity = registrySummary?.dist?.integrity ?? registrySummary?.tarball?.sha512 ?? 'unavailable';
+  const registryTarballSha256 = registrySummary?.tarball?.sha256 ?? preparedArtifactSummary?.tarball?.sha256 ?? manifest.artifact.sha256;
+  const registryTarballUrl = registrySummary?.dist?.tarball ?? 'unavailable';
+  const registryAttestations = registrySummary?.dist?.attestations
+    ? JSON.stringify(registrySummary.dist.attestations)
+    : 'unavailable';
+  const provenanceEvidence = manifest.publication.provenance
+    ? `requested; registryAttestations=${registryAttestations}`
+    : 'not-requested';
+
+  return [
+    '[PublicationEvidence]',
+    `Status=${status}`,
+    `Package=${manifest.package.name}`,
+    `Version=${manifest.package.version}`,
+    `Commit=${manifest.source.commit}`,
+    `ManifestCommit=${manifestCommit ?? manifest.source.commit}`,
+    `SourceCommit=${manifest.source.commit}`,
+    `FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`,
+    `ReleaseWorkflowCommit=${manifest.release.finalWorkflowCommit}`,
+    `FinalWorkflowCommit=${manifest.release.finalWorkflowCommit}`,
+    `PackageSHA256=${manifest.artifact.sha256}`,
+    `PackageSHA512=${manifest.artifact.sha512 ?? ''}`,
+    `PreparedRunID=${preparedRunId}`,
+    `PreparedArtifactID=${preparedArtifactId}`,
+    `ApprovalCommentID=${approvalCommentId}`,
+    `WorkflowRunID=${workflowRunId}`,
+    `WorkflowRunAttempt=${workflowRunAttempt ?? 'unknown'}`,
+    `WorkflowURL=${workflowUrl}`,
+    `RegistryStatus=${registrySummary?.status ?? 'unknown'}`,
+    `RegistryIntegrity=${registryIntegrity}`,
+    `RegistryTarballSHA256=${registryTarballSha256}`,
+    `RegistryTarballURL=${registryTarballUrl}`,
+    `Provenance=${provenanceEvidence}`,
+    `IdempotentSkip=${status === 'SKIPPED_ALREADY_PUBLISHED' ? 'TRUE' : 'FALSE'}`,
+  ].join('\n');
+}
+
 function classifyRegistryVersion(metadata, manifest, allowMissing) {
   if (!metadata) {
     return allowMissing ? 'missing' : 'missing-fail';
@@ -433,6 +508,7 @@ module.exports = {
   assertPublishTokenForMode,
   assertSupportedToolchain,
   classifyRegistryVersion,
+  buildPublicationEvidence,
   parseStructuredFields,
   readJsonFile,
   readReleaseManifest,

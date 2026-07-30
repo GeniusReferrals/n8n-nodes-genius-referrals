@@ -106,6 +106,7 @@ async function main() {
     metadataUrl,
     package: manifest.package,
     source: manifest.source,
+    release: manifest.release,
     status: 'started',
   };
 

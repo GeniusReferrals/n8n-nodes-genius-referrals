@@ -39,7 +39,6 @@ permissions:
   actions: read
   contents: read
   id-token: write
-  issues: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -124,6 +123,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_action == 'publish' }}
     environment: npm-production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      issues: write
     steps:
       - name: Check out release automation
         uses: actions/checkout@v4
@@ -164,11 +168,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          RELEASE_WORKFLOW_COMMIT="$(git log -n 1 --format=%H -- .github/workflows/publish-n8n-node.yml scripts)"
           node scripts/verify-production-approval.cjs \
             --manifest "$RELEASE_MANIFEST_PATH" \
             --comment-id "$APPROVAL_COMMENT_ID" \
             --prepared-run-id "$PREPARED_RUN_ID" \
             --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --current-workflow-commit "$RELEASE_WORKFLOW_COMMIT" \
             --summary-file "$RUNNER_TEMP/approval-gate.json"
 
       - name: Download approved prepared artifact
@@ -204,9 +210,20 @@ jobs:
 
       - name: Record idempotent success
         if: ${{ steps.registry_before.outputs.status == 'published' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/record-publication-evidence.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --status "SKIPPED_ALREADY_PUBLISHED" \
+            --approval-comment-id "$APPROVAL_COMMENT_ID" \
+            --prepared-run-id "$PREPARED_RUN_ID" \
+            --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --prepared-artifact-summary-file "$RUNNER_TEMP/prepared-artifact.json" \
+            --registry-summary-file "$RUNNER_TEMP/registry-before.json" \
+            --summary-file "$RUNNER_TEMP/publication-evidence.json"
           {
             echo "### n8n package publication"
             echo ""
@@ -246,9 +263,20 @@ jobs:
 
       - name: Record publication evidence
         if: ${{ steps.registry_before.outputs.status != 'published' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/record-publication-evidence.cjs \
+            --manifest "$RELEASE_MANIFEST_PATH" \
+            --status "PUBLISHED" \
+            --approval-comment-id "$APPROVAL_COMMENT_ID" \
+            --prepared-run-id "$PREPARED_RUN_ID" \
+            --prepared-artifact-id "$PREPARED_ARTIFACT_ID" \
+            --prepared-artifact-summary-file "$RUNNER_TEMP/prepared-artifact.json" \
+            --registry-summary-file "$RUNNER_TEMP/registry-after.json" \
+            --summary-file "$RUNNER_TEMP/publication-evidence.json"
           {
             echo "### n8n package publication"
             echo ""

@@ -130,6 +130,7 @@ function main() {
     status: 'started',
     package: manifest.package,
     source: manifest.source,
+    release: manifest.release,
     toolchain: {
       node: nodeVersion,
       npm: npmVersion,

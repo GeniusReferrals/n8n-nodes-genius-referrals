@@ -101,8 +101,8 @@ test('getGeniusReferralsApiCredentials normalizes credential base URL and falls 
       };
     },
     helpers: {
-      async requestWithAuthentication() {
-        throw new Error('requestWithAuthentication should not be called');
+      async httpRequestWithAuthentication() {
+        throw new Error('httpRequestWithAuthentication should not be called');
       },
     },
   });
@@ -118,8 +118,8 @@ test('getGeniusReferralsApiCredentials normalizes credential base URL and falls 
       };
     },
     helpers: {
-      async requestWithAuthentication() {
-        throw new Error('requestWithAuthentication should not be called');
+      async httpRequestWithAuthentication() {
+        throw new Error('httpRequestWithAuthentication should not be called');
       },
     },
   });
@@ -139,7 +139,7 @@ test('createGeniusReferralsApiClient binds credential lookup to authenticated re
       };
     },
     helpers: {
-      async requestWithAuthentication(credentialType, requestOptions) {
+      async httpRequestWithAuthentication(credentialType, requestOptions) {
         calls.push({ credentialType, requestOptions });
 
         return {
@@ -173,7 +173,7 @@ test('createGeniusReferralsApiClient preserves shared error mapping and allows r
       };
     },
     helpers: {
-      async requestWithAuthentication() {
+      async httpRequestWithAuthentication() {
         throw {
           response: {
             statusCode: 404,

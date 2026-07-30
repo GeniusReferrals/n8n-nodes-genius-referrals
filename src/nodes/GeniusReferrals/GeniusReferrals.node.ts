@@ -1,9 +1,10 @@
-import type { INodeType } from 'n8n-core';
 import {
+  NodeConnectionTypes,
   NodeApiError,
 } from 'n8n-workflow';
 import type {
   IDataObject,
+  INodeType,
   ILoadOptionsFunctions,
   INodeExecutionData,
   INodeProperties,
@@ -33,11 +34,16 @@ type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
 export class GeniusReferrals implements INodeType {
   description = {
     version: 1,
+    icon: {
+      light: 'file:../../../icons/genius-referrals.svg',
+      dark: 'file:../../../icons/genius-referrals-dark.svg',
+    },
+    subtitle: '={{$parameter["operation"]}}',
     defaults: {
       name: 'Genius Referrals',
     },
-    inputs: ['main'],
-    outputs: ['main'],
+    inputs: [NodeConnectionTypes.Main],
+    outputs: [NodeConnectionTypes.Main],
     credentials: [
       {
         name: 'geniusReferralsApi',
@@ -270,6 +276,7 @@ export class GeniusReferrals implements INodeType {
         },
       },
     ] as INodeProperties[],
+    usableAsTool: true,
   };
 
   methods = {
@@ -312,7 +319,7 @@ export class GeniusReferrals implements INodeType {
         const parameters = getNodeOperationParameters(this, itemIndex);
         const request = buildGeniusReferralsRequestDefinition(parameters);
         const response = await grApiRequestWithAuthentication(
-          this.helpers.requestWithAuthentication.bind(this.helpers),
+          this.helpers.httpRequestWithAuthentication.bind(this.helpers),
           {
             ...request,
             baseUrl: credentials.baseUrl,
@@ -407,7 +414,7 @@ async function loadCollection(
   const credentials = await getGeniusReferralsApiCredentials(context);
 
   return grApiRequestWithAuthentication(
-    context.helpers.requestWithAuthentication.bind(context.helpers),
+    context.helpers.httpRequestWithAuthentication.bind(context.helpers),
     {
       baseUrl: credentials.baseUrl,
       endpoint,

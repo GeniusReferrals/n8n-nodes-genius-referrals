@@ -12,7 +12,7 @@ declare module 'n8n-workflow' {
     [key: string]: GenericValue;
   }
 
-  export interface JsonObject extends IDataObject {}
+  export type JsonObject = IDataObject;
 
   export type IHttpRequestMethods = 'DELETE' | 'GET' | 'HEAD' | 'PATCH' | 'POST' | 'PUT';
 
@@ -79,7 +79,7 @@ declare module 'n8n-workflow' {
     [key: string]: unknown;
   }
 
-  export interface ICredentialDataDecryptedObject extends IDataObject {}
+  export type ICredentialDataDecryptedObject = IDataObject;
 
   export interface INodeCredentialsDetails {
     id?: string | null;
@@ -113,8 +113,16 @@ declare module 'n8n-workflow' {
     constructor(node: INode, errorResponse: JsonObject, options?: NodeApiErrorOptions);
   }
 
+  export enum NodeConnectionTypes {
+    Main = 'main',
+  }
+
+  export interface INodeType {
+    description: Record<string, unknown>;
+  }
+
   export interface IRequestHelperFunctions {
-    requestWithAuthentication(
+    httpRequestWithAuthentication(
       credentialType: string,
       requestOptions: IHttpRequestOptions,
     ): Promise<unknown>;
@@ -132,7 +140,7 @@ declare module 'n8n-workflow' {
     helpers: IRequestHelperFunctions;
   }
 
-  export interface ICredentialTestFunctions extends ICredentialAccessorFunctions {}
+  export type ICredentialTestFunctions = ICredentialAccessorFunctions;
 
   export interface IExecuteFunctions extends ICredentialAccessorFunctions {
     continueOnFail(): boolean;
@@ -141,7 +149,7 @@ declare module 'n8n-workflow' {
     getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
   }
 
-  export interface ILoadOptionsFunctions extends ICredentialAccessorFunctions {
+  export type ILoadOptionsFunctions = ICredentialAccessorFunctions & {
     getCurrentNodeParameter(name: string): unknown;
-  }
+  };
 }

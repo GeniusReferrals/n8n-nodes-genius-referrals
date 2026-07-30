@@ -832,7 +832,9 @@ function parseRequiredDataObject(
       return ensureDataObject(parsedValue, fieldName);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown JSON parse error';
-      throw new Error(`${fieldName} must be valid JSON. ${message}`);
+      // Helper parse errors are converted into node-facing errors by the node execution wrapper.
+      // eslint-disable-next-line @n8n/community-nodes/require-node-api-error
+      throw new SyntaxError(`${fieldName} must be valid JSON. ${message}`);
     }
   }
 

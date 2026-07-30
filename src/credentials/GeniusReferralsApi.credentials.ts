@@ -5,6 +5,11 @@ export class GeniusReferralsApi implements ICredentialType {
 
   displayName = 'Genius Referrals API';
 
+  icon = {
+    light: 'file:../../icons/genius-referrals.svg',
+    dark: 'file:../../icons/genius-referrals-dark.svg',
+  };
+
   documentationUrl = 'https://api.geniusreferrals.com/doc';
 
   authenticate: IAuthenticate = {

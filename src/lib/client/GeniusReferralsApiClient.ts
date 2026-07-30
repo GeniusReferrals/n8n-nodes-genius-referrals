@@ -35,7 +35,7 @@ export interface GeniusReferralsApiCredentials extends ICredentialDataDecryptedO
 export interface GeniusReferralsApiRequestContext {
   getCredentials(name: string): Promise<ICredentialDataDecryptedObject>;
   helpers: {
-    requestWithAuthentication: GeniusReferralsAuthenticatedRequestExecutor;
+    httpRequestWithAuthentication: GeniusReferralsAuthenticatedRequestExecutor;
   };
 }
 
@@ -180,7 +180,7 @@ export async function createGeniusReferralsApiClient(
     credentials,
     request: async <T>(options: GeniusReferralsRequestOptions) =>
       grApiRequestWithAuthentication<T>(
-        context.helpers.requestWithAuthentication.bind(context.helpers),
+        context.helpers.httpRequestWithAuthentication.bind(context.helpers),
         {
           ...options,
           baseUrl: options.baseUrl ?? credentials.baseUrl,

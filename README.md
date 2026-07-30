@@ -55,7 +55,7 @@ Use the generated tarball in a test n8n instance to confirm the node loads and t
 Create a `Genius Referrals API` credential in n8n with:
 
 - `API Token`: your Genius Referrals API token. This is sent as the `X-Auth-Token` header.
-- `Base URL`: defaults to `https://www.geniusreferrals.com/api/2.0`
+- `Base URL`: defaults to `https://api.geniusreferrals.com`
 
 The node also includes `Utilities -> Test authentication` so you can verify the credential before running other operations.
 

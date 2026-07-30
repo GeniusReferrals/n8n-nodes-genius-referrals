@@ -9,12 +9,12 @@ publish from a local machine, Discord, a Project field, the n8n Creator Portal,
 or any other non-GitHub-Actions surface.
 
 The current release manifest is `release-manifest.json`. It is the per-release
-source for package name, version, source commit, expected package checksum,
-approval issue, GitHub Environment name, and secret name. The reusable workflow
-does not hard-code those release values.
+source for package name, version, source commit, final release/workflow commit,
+expected package checksum, approval issue, GitHub Environment name, and secret
+name. The reusable workflow does not hard-code those release values.
 
-Any mismatch in package name, version, source commit, prepared artifact ID,
-workflow run ID, or checksum fails closed.
+Any mismatch in package name, version, source commit, final release/workflow
+commit, prepared artifact ID, workflow run ID, or checksum fails closed.
 
 ## Release Preparation
 
@@ -63,6 +63,7 @@ Decision=APPROVED
 Package=<manifest package>
 Version=<manifest version>
 Commit=<manifest source commit>
+FinalReleaseCommit=<manifest release finalWorkflowCommit>
 PackageSHA256=<manifest tarball sha256>
 AuthorizedActions=npm publication
 PreparedRunID=<approved preparation workflow run id>
@@ -71,8 +72,10 @@ PreparedArtifactID=<approved prepared artifact id>
 
 The gate rejects comments from bots or operators that merely contain
 `ApprovedBy=alainhl`. It also rejects comments on the wrong issue, missing or
-duplicated structured fields, mismatched artifact/run identity, and prepared
-artifacts already consumed for a different release.
+duplicated structured fields, mismatched artifact/run identity, publication
+dispatches running different release automation than the manifest-approved
+final release/workflow commit, and prepared artifacts already consumed for a
+different release.
 
 ## Required GitHub Environment
 
@@ -118,6 +121,14 @@ The publication job downloads the exact prepared tarball from the approved run
 and artifact ID. It recomputes checksum evidence before any registry action. It
 does not rebuild a new tarball after approval.
 
+Before artifact download or registry checks, the publication gate computes the
+release automation commit from the checked-out workflow and release scripts and
+requires it to match both `release.finalWorkflowCommit` in the manifest and
+`FinalReleaseCommit` in Alain's structured approval packet. Manifest-only
+follow-up commits may update the manifest to point at the final release
+automation commit; the workflow and release scripts themselves must not change
+after that approved commit without a new manifest and approval packet.
+
 The real publish step runs:
 
 ```bash
@@ -134,7 +145,8 @@ Before any real publish attempt, the workflow checks the npm registry for the
 manifest package and version.
 
 If the version exists and the downloaded registry tarball has the manifest
-SHA-256, the workflow records success and skips `npm publish`.
+SHA-256, the workflow writes durable `[PublicationEvidence]` to the release
+issue, records success, and skips `npm publish`.
 
 If the version exists with a different checksum, the workflow fails closed and
 does not publish.
@@ -163,6 +175,15 @@ The workflow summary must record workflow run URL, approval comment ID,
 prepared run ID, prepared artifact ID, source commit, package version, package
 checksum, registry verification result, and provenance/attestation evidence
 where available.
+
+The workflow must also write a durable `[PublicationEvidence]` issue comment to
+the manifest publication issue. That record includes package, version, manifest
+commit, source commit, final release/workflow commit, package checksum,
+prepared run ID, prepared artifact ID, workflow run URL, registry integrity,
+registry tarball checksum, provenance evidence when npm exposes it, and whether
+publication was skipped idempotently because the exact version already existed.
+Future publication gates use that issue record to refuse prepared artifact reuse
+for a different release.
 
 ## Rollback And Deprecation Limits
 

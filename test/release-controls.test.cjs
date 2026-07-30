@@ -72,6 +72,16 @@ test('workflow maps dispatch inputs before shell use', () => {
   }
 });
 
+test('workflow scopes issue write permission to publish job', () => {
+  const workflow = require('node:fs').readFileSync('.github/workflows/publish-n8n-node.yml', 'utf8');
+
+  assert.match(workflow, /^permissions:\n(?:  .+\n)*  issues: read$/m);
+  assert.match(workflow, /publish-release:[\s\S]*?permissions:\n(?: {6}.+\n)* {6}issues: write/);
+
+  const prepareJob = workflow.slice(workflow.indexOf('prepare-release:'), workflow.indexOf('publish-release:'));
+  assert.equal(prepareJob.includes('issues: write'), false);
+});
+
 test('approval gate requires actual alainhl GitHub author and structured fields', () => {
   const summary = verifyApprovalComment({
     approvalComment: approvalComment(),

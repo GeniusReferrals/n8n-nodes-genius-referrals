@@ -5,10 +5,10 @@
     "version": "0.1.0"
   },
   "source": {
-    "commit": "dbc6b2d8303e21afa971e729274c5c125290a6a8"
+    "commit": "3bddffe0fbd897133c0a9cb8c2497b40e704ffc3"
   },
   "release": {
-    "finalWorkflowCommit": "23d6aed6891963318d75498aef04059063c9727d"
+    "finalWorkflowCommit": "3bddffe0fbd897133c0a9cb8c2497b40e704ffc3"
   },
   "artifact": {
     "sha256": "dc3ebca69652c7e0c1f306f0c24202e593081f77bdbb60bd2e3488481981a936",

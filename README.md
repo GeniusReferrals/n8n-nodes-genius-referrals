@@ -150,7 +150,7 @@ The detailed release checklist lives in [docs/release-readiness.md](docs/release
 Current release notes:
 
 - Package naming and `n8n` metadata are in place for a community node package.
-- TypeScript build output is generated into `dist/`.
+- TypeScript build output is generated into `dist/`, and the `dist/` metadata paths advertised in `package.json` are committed so n8n Creator Portal repository validation can resolve the credential and node files.
 - Repo tests cover request wrapping, query requirements, and API client error mapping.
-- `lint` is still a placeholder script and should be replaced by a real lint configuration before public release.
+- `lint` runs `n8n-node lint` with the package's n8n community-node rules.
 - Final npm publish and n8n Creator Portal submission require Alain approval.

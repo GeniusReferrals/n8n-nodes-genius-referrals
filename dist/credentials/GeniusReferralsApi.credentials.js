@@ -7,7 +7,7 @@ class GeniusReferralsApi {
         this.displayName = 'Genius Referrals API';
         this.icon = {
             light: 'file:../../icons/genius-referrals.svg',
-            dark: 'file:../../icons/genius-referrals-dark.svg',
+            dark: 'file:../../icons/genius-referrals-dark.png',
         };
         this.documentationUrl = 'https://api.geniusreferrals.com/doc';
         this.authenticate = {

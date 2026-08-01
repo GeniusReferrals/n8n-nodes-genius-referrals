@@ -36,7 +36,7 @@ export class GeniusReferrals implements INodeType {
     version: 1,
     icon: {
       light: 'file:../../../icons/genius-referrals.svg',
-      dark: 'file:../../../icons/genius-referrals-dark.svg',
+      dark: 'file:../../../icons/genius-referrals-dark.png',
     },
     subtitle: '={{$parameter["operation"]}}',
     defaults: {

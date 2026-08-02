@@ -6,8 +6,8 @@ export class GeniusReferralsApi implements ICredentialType {
   displayName = 'Genius Referrals API';
 
   icon = {
-    light: 'file:../../icons/genius-referrals.svg',
-    dark: 'file:../../icons/genius-referrals-dark.png',
+    light: 'file:../icons/genius-referrals.svg',
+    dark: 'file:../icons/genius-referrals-dark.png',
   };
 
   documentationUrl = 'https://api.geniusreferrals.com/doc';

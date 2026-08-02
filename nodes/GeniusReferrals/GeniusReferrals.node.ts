@@ -35,8 +35,8 @@ export class GeniusReferrals implements INodeType {
   description = {
     version: 1,
     icon: {
-      light: 'file:../../../icons/genius-referrals.svg',
-      dark: 'file:../../../icons/genius-referrals-dark.png',
+      light: 'file:../../icons/genius-referrals.svg',
+      dark: 'file:../../icons/genius-referrals-dark.png',
     },
     subtitle: '={{$parameter["operation"]}}',
     defaults: {
@@ -61,11 +61,11 @@ export class GeniusReferrals implements INodeType {
       },
       ...createOperationProperties(),
       {
-        displayName: 'Account Slug',
+        displayName: 'Account Slug Name or ID',
         name: 'accountSlug',
         type: 'options',
         default: '',
-        description: 'Account slug used in the GR API path. Accounts load dynamically from the API token.',
+        description: 'Account slug used in the GR API path. Accounts load dynamically from the API token. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('accountSlug'),
@@ -77,11 +77,11 @@ export class GeniusReferrals implements INodeType {
         },
       },
       {
-        displayName: 'Client Slug',
+        displayName: 'Client Slug Name or ID',
         name: 'clientSlug',
         type: 'options',
         default: '',
-        description: 'Client slug passed as client_slug for report requests.',
+        description: 'Client slug passed as client_slug for report requests. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('clientSlug'),
@@ -96,8 +96,9 @@ export class GeniusReferrals implements INodeType {
         displayName: 'Advocate Token',
         name: 'advocateToken',
         type: 'string',
+        typeOptions: { password: true },
         default: '',
-        description: 'Unique advocate token used by advocate and referral endpoints.',
+        description: 'Unique advocate token used by advocate and referral endpoints',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('advocateToken'),
@@ -109,7 +110,7 @@ export class GeniusReferrals implements INodeType {
         name: 'campaignSlug',
         type: 'string',
         default: '',
-        description: 'Campaign slug used when retrieving one campaign.',
+        description: 'Campaign slug used when retrieving one campaign',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('campaignSlug'),
@@ -121,7 +122,7 @@ export class GeniusReferrals implements INodeType {
         name: 'bonusId',
         type: 'string',
         default: '',
-        description: 'Numeric bonus identifier.',
+        description: 'Numeric bonus identifier',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('bonusId'),
@@ -133,7 +134,7 @@ export class GeniusReferrals implements INodeType {
         name: 'traceId',
         type: 'string',
         default: '',
-        description: 'Trace identifier returned by bonus trace requests.',
+        description: 'Trace identifier returned by bonus trace requests',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('traceId'),
@@ -145,7 +146,7 @@ export class GeniusReferrals implements INodeType {
         name: 'redemptionRequestId',
         type: 'string',
         default: '',
-        description: 'Numeric redemption request identifier.',
+        description: 'Numeric redemption request identifier',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('redemptionRequestId'),
@@ -157,7 +158,7 @@ export class GeniusReferrals implements INodeType {
         name: 'referralId',
         type: 'string',
         default: '',
-        description: 'Numeric referral identifier.',
+        description: 'Numeric referral identifier',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('referralId'),
@@ -165,11 +166,11 @@ export class GeniusReferrals implements INodeType {
         },
       },
       {
-        displayName: 'Bonuses Redemption Method Slug',
+        displayName: 'Bonuses Redemption Method Slug Name or ID',
         name: 'bonusesRedemptionMethodSlug',
         type: 'options',
         default: '',
-        description: 'Bonuses redemption method slug from the Utilities API.',
+        description: 'Bonuses redemption method slug from the Utilities API. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('bonusesRedemptionMethodSlug'),
@@ -181,11 +182,11 @@ export class GeniusReferrals implements INodeType {
         },
       },
       {
-        displayName: 'Currency Code',
+        displayName: 'Currency Code Name or ID',
         name: 'currencyCode',
         type: 'options',
         default: '',
-        description: 'Currency code from the Utilities API.',
+        description: 'Currency code from the Utilities API. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('currencyCode'),
@@ -197,11 +198,11 @@ export class GeniusReferrals implements INodeType {
         },
       },
       {
-        displayName: 'Redemption Request Action Slug',
+        displayName: 'Redemption Request Action Slug Name or ID',
         name: 'requestActionSlug',
         type: 'options',
         default: '',
-        description: 'Redemption request action slug from the Utilities API.',
+        description: 'Redemption request action slug from the Utilities API. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('requestActionSlug'),
@@ -213,11 +214,11 @@ export class GeniusReferrals implements INodeType {
         },
       },
       {
-        displayName: 'Redemption Request Status Slug',
+        displayName: 'Redemption Request Status Slug Name or ID',
         name: 'requestStatusSlug',
         type: 'options',
         default: '',
-        description: 'Redemption request status slug from the Utilities API.',
+        description: 'Redemption request status slug from the Utilities API. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('requestStatusSlug'),
@@ -229,11 +230,11 @@ export class GeniusReferrals implements INodeType {
         },
       },
       {
-        displayName: 'Referral Origin Slug',
+        displayName: 'Referral Origin Slug Name or ID',
         name: 'referralOriginSlug',
         type: 'options',
         default: '',
-        description: 'Referral origin slug from the Utilities API.',
+        description: 'Referral origin slug from the Utilities API. Choose from the list, or specify an ID using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
         displayOptions: {
           show: {
             operation: getOperationsWithParameter('referralOriginSlug'),

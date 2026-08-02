@@ -5,13 +5,13 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 
 const EXPECTED_NODE_ICON = {
-  light: 'file:../../../icons/genius-referrals.svg',
-  dark: 'file:../../../icons/genius-referrals-dark.png',
+  light: 'file:../../icons/genius-referrals.svg',
+  dark: 'file:../../icons/genius-referrals-dark.png',
 };
 
 const EXPECTED_CREDENTIAL_ICON = {
-  light: 'file:../../icons/genius-referrals.svg',
-  dark: 'file:../../icons/genius-referrals-dark.png',
+  light: 'file:../icons/genius-referrals.svg',
+  dark: 'file:../icons/genius-referrals-dark.png',
 };
 
 function packageFilesFromDryRun() {

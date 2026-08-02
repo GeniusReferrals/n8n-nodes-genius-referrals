@@ -88,7 +88,7 @@ function futureManifest(overrides = {}) {
       finalWorkflowCommit: overrides.finalWorkflowCommit ?? '2222222222222222222222222222222222222222',
     },
     artifact: {
-      sha256: overrides.sha256 ?? '3333333333333333333333333333333333333333333333333333333333333333',
+      sha256: overrides.sha256 ?? '3'.repeat(64),
       sha512: manifest.artifact.sha512,
     },
   };

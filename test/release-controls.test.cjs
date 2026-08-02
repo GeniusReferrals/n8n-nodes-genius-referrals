@@ -15,6 +15,13 @@ const {
   verifyApprovalComment,
   verifyPreparedArtifact,
 } = require('../scripts/release-controls.cjs');
+const {
+  scanOutputPassed,
+} = require('../scripts/verify-community-scan.cjs');
+const {
+  isAlreadyPublishedDryRunError,
+  parseNpmViewDist,
+} = require('../scripts/verify-approved-release.cjs');
 
 const manifest = readReleaseManifest('release-manifest.json');
 
@@ -229,9 +236,57 @@ test('release preparation enforces real n8n lint and refuses npm tokens', () => 
   const verifier = require('node:fs').readFileSync('scripts/verify-approved-release.cjs', 'utf8');
 
   assert.equal(packageJson.scripts.lint, 'n8n-node lint');
+  assert.equal(
+    packageJson.scripts['release:scan-community'],
+    'node scripts/verify-community-scan.cjs --manifest release-manifest.json',
+  );
   assert.equal(verifier.includes("summary.commands.push('npm run lint: PASS')"), true);
   assert.throws(() => assertNoNpmTokenEnv({ NPM_TOKEN: 'secret' }), /must not be present/);
   assert.doesNotThrow(() => assertNoNpmTokenEnv({}));
+});
+
+test('community scan gate runs exact scanner command and fails closed on scanner output', () => {
+  const scanner = require('node:fs').readFileSync('scripts/verify-community-scan.cjs', 'utf8');
+
+  assert.equal(scanner.includes("'@n8n/scan-community-package@beta', manifest.package.name"), true);
+  assert.equal(scanOutputPassed('Package n8n-nodes-genius-referrals has failed security checks'), false);
+  assert.equal(scanOutputPassed('Package n8n-nodes-genius-referrals passed security checks'), true);
+});
+
+test('release preparation treats exact already-published dry-run conflict as registry readback', () => {
+  const error = {
+    message: `npm publish --dry-run failed: You cannot publish over the previously published versions: ${manifest.package.version}.`,
+  };
+  const otherVersionError = {
+    message: 'npm publish --dry-run failed: You cannot publish over the previously published versions: 9.9.9.',
+  };
+
+  assert.equal(isAlreadyPublishedDryRunError(error, manifest), true);
+  assert.equal(isAlreadyPublishedDryRunError(otherVersionError, manifest), false);
+  assert.deepEqual(
+    parseNpmViewDist(JSON.stringify({
+      'dist.integrity': manifest.artifact.sha512,
+      'dist.tarball': `https://registry.npmjs.org/${manifest.package.name}/-/${manifest.package.name}-${manifest.package.version}.tgz`,
+    })),
+    {
+      integrity: manifest.artifact.sha512,
+      tarball: `https://registry.npmjs.org/${manifest.package.name}/-/${manifest.package.name}-${manifest.package.version}.tgz`,
+    },
+  );
+});
+
+test('publication workflow gates Creator Portal evidence on community package scan', () => {
+  const workflow = require('node:fs').readFileSync('.github/workflows/publish-n8n-node.yml', 'utf8');
+  const idempotentScanIndex = workflow.indexOf('Scan community package before Creator Portal evidence');
+  const idempotentEvidenceIndex = workflow.indexOf('Record idempotent success');
+  const publishScanIndex = workflow.lastIndexOf('Scan community package before Creator Portal evidence');
+  const publishEvidenceIndex = workflow.indexOf('Record publication evidence');
+
+  assert.notEqual(idempotentScanIndex, -1);
+  assert.notEqual(publishScanIndex, -1);
+  assert.equal(workflow.includes('npm run release:scan-community'), true);
+  assert.equal(idempotentScanIndex < idempotentEvidenceIndex, true);
+  assert.equal(publishScanIndex < publishEvidenceIndex, true);
 });
 
 test('prepared artifact verification reuses exact tarball and rejects changed checksum', () => {

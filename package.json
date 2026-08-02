@@ -16,6 +16,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "n8n-node lint",
     "release:prepare": "node scripts/verify-approved-release.cjs --manifest release-manifest.json",
+    "release:scan-community": "node scripts/verify-community-scan.cjs --manifest release-manifest.json",
     "release:verify-approved": "node scripts/verify-approved-release.cjs --manifest release-manifest.json",
     "release:verify-artifact": "node scripts/verify-prepared-artifact.cjs --manifest release-manifest.json",
     "release:verify-approval": "node scripts/verify-production-approval.cjs --manifest release-manifest.json",

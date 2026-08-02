@@ -49,8 +49,8 @@ function parseArgs(argv) {
   return options;
 }
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+function runRaw(command, args, options = {}) {
+  return spawnSync(command, args, {
     cwd: options.cwd,
     encoding: 'utf8',
     env: {
@@ -59,16 +59,28 @@ function run(command, args, options = {}) {
     },
     stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
   });
+}
+
+function commandFailure(command, args, result, capture) {
+  const detail = capture
+    ? `\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
+    : '';
+  const error = new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}${detail}`);
+  error.stdout = result.stdout ?? '';
+  error.stderr = result.stderr ?? '';
+  error.status = result.status;
+  return error;
+}
+
+function run(command, args, options = {}) {
+  const result = runRaw(command, args, options);
 
   if (result.error) {
     throw result.error;
   }
 
   if (result.status !== 0) {
-    const detail = options.capture
-      ? `\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
-      : '';
-    throw new Error(`${command} ${args.join(' ')} failed with exit code ${result.status}${detail}`);
+    throw commandFailure(command, args, result, options.capture);
   }
 
   return result;
@@ -114,6 +126,56 @@ function parsePackOutput(stdout, packDir) {
     unpackedSize: entry.unpackedSize ?? null,
     packedSize: entry.size ?? null,
   };
+}
+
+function isAlreadyPublishedDryRunError(error, manifest) {
+  const output = `${error?.message ?? ''}\n${error?.stdout ?? ''}\n${error?.stderr ?? ''}`;
+
+  return (
+    output.includes('You cannot publish over the previously published versions') &&
+    output.includes(manifest.package.version)
+  );
+}
+
+function parseNpmViewDist(stdout) {
+  const parsed = JSON.parse(stdout);
+
+  return {
+    integrity: parsed['dist.integrity'] ?? parsed.integrity ?? null,
+    tarball: parsed['dist.tarball'] ?? parsed.tarball ?? null,
+  };
+}
+
+function verifyAlreadyPublishedRegistryState({ manifest, computedSha512, sourceDir }) {
+  const viewResult = run(
+    'npm',
+    ['view', `${manifest.package.name}@${manifest.package.version}`, 'dist.integrity', 'dist.tarball', '--json'],
+    {
+      cwd: sourceDir,
+      capture: true,
+    },
+  );
+  const dist = parseNpmViewDist(viewResult.stdout);
+
+  if (!dist.integrity) {
+    throw new Error(`Registry metadata for ${manifest.package.name}@${manifest.package.version} is missing dist.integrity`);
+  }
+
+  if (dist.integrity !== computedSha512) {
+    throw new Error(
+      `Registry integrity mismatch for already published ${manifest.package.name}@${manifest.package.version}. ` +
+        `Expected prepared tarball ${computedSha512}, got ${dist.integrity}`,
+    );
+  }
+
+  if (manifest.artifact.sha512 && dist.integrity !== manifest.artifact.sha512) {
+    throw new Error(
+      `Registry integrity mismatch for manifest ${manifest.package.name}@${manifest.package.version}. ` +
+        `Expected ${manifest.artifact.sha512}, got ${dist.integrity}`,
+    );
+  }
+
+  return dist;
 }
 
 function main() {
@@ -185,9 +247,6 @@ function main() {
     const computedSha256 = sha256File(packSummary.tarballPath);
     const computedSha512 = sha512IntegrityFile(packSummary.tarballPath);
 
-    run('npm', ['publish', '--dry-run', '--access', 'public', packSummary.tarballPath], { cwd: sourceDir });
-    summary.commands.push('npm publish --dry-run --access public <prepared-tarball>: PASS');
-
     summary.tarball = {
       path: packSummary.tarballPath,
       filename: basename(packSummary.tarballPath),
@@ -214,6 +273,36 @@ function main() {
       throw new Error(summary.error);
     }
 
+    try {
+      const dryRunResult = run('npm', ['publish', '--dry-run', '--access', 'public', packSummary.tarballPath], {
+        cwd: sourceDir,
+        capture: true,
+      });
+      if (dryRunResult.stdout) {
+        process.stdout.write(dryRunResult.stdout);
+      }
+      if (dryRunResult.stderr) {
+        process.stderr.write(dryRunResult.stderr);
+      }
+      summary.commands.push('npm publish --dry-run --access public <prepared-tarball>: PASS');
+    } catch (error) {
+      if (!isAlreadyPublishedDryRunError(error, manifest)) {
+        throw error;
+      }
+
+      const registryDist = verifyAlreadyPublishedRegistryState({
+        manifest,
+        computedSha512,
+        sourceDir,
+      });
+      summary.commands.push('npm publish --dry-run --access public <prepared-tarball>: SKIPPED_ALREADY_PUBLISHED');
+      summary.registry = {
+        status: 'published',
+        integrity: registryDist.integrity,
+        tarball: registryDist.tarball,
+      };
+    }
+
     summary.status = 'passed';
     writeJsonFile(options.summaryFile, summary);
     console.log(`Prepared ${manifest.package.name}@${manifest.package.version} from ${manifest.source.commit}`);
@@ -238,9 +327,17 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error.message);
-  process.exit(1);
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }
+
+module.exports = {
+  isAlreadyPublishedDryRunError,
+  parseNpmViewDist,
+  verifyAlreadyPublishedRegistryState,
+};

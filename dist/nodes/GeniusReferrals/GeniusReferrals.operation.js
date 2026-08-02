@@ -6,6 +6,7 @@ exports.createOperationProperties = createOperationProperties;
 exports.getOperationsForResource = getOperationsForResource;
 exports.getOperationsWithBody = getOperationsWithBody;
 exports.getOperationsWithParameter = getOperationsWithParameter;
+const n8n_workflow_1 = require("n8n-workflow");
 const RESOURCE_LABELS = {
     accounts: 'Accounts',
     advocates: 'Advocates',
@@ -478,9 +479,9 @@ const OPERATION_DEFINITIONS = [
 ];
 const OPERATION_BY_VALUE = new Map(OPERATION_DEFINITIONS.map((operation) => [operation.value, operation]));
 exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE = buildOperationsByResource();
-function buildGeniusReferralsRequestDefinition(parameters) {
+function buildGeniusReferralsRequestDefinition(parameters, node = GENIUS_REFERRALS_VALIDATION_NODE) {
     const definition = getOperationDefinition(parameters.operation);
-    const query = parseOptionalDataObject(parameters.queryJson, 'Query JSON');
+    const query = parseOptionalDataObject(parameters.queryJson, 'Query JSON', node);
     const request = {
         endpoint: definition.endpoint(parameters),
         method: definition.method,
@@ -496,24 +497,12 @@ function buildGeniusReferralsRequestDefinition(parameters) {
         assertRequiredQueryKeys(mergedQuery, definition.requiresQueryKeys);
     }
     if (definition.bodyStrategy !== undefined) {
-        request.body = buildRequestBody(definition.bodyStrategy, definition.bodyWrapperKey, parameters.payloadJson);
+        request.body = buildRequestBody(definition.bodyStrategy, definition.bodyWrapperKey, parameters.payloadJson, node);
     }
     return request;
 }
 function createOperationProperties() {
-    return Object.entries(exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE).map(([resource, options]) => ({
-        displayName: 'Operation',
-        name: 'operation',
-        type: 'options',
-        default: options[0]?.value ?? '',
-        displayOptions: {
-            show: {
-                resource: [resource],
-            },
-        },
-        noDataExpression: true,
-        options,
-    }));
+    return OPERATION_PROPERTIES;
 }
 function getOperationsForResource(resource) {
     return OPERATION_DEFINITIONS.filter((operation) => operation.resource === resource).map((operation) => operation.value);
@@ -600,11 +589,11 @@ function buildOperationsByResource() {
     }
     return grouped;
 }
-function buildRequestBody(strategy, wrapperKey, payloadValue) {
+function buildRequestBody(strategy, wrapperKey, payloadValue, node) {
     if (payloadValue === undefined) {
         throw new Error('Payload JSON must contain a JSON object.');
     }
-    const payload = parseRequiredDataObject(payloadValue, 'Payload JSON');
+    const payload = parseRequiredDataObject(payloadValue, 'Payload JSON', node);
     if (strategy === 'raw') {
         return payload;
     }
@@ -641,16 +630,16 @@ function getOperationDefinition(operationValue) {
     }
     return definition;
 }
-function parseOptionalDataObject(value, fieldName) {
+function parseOptionalDataObject(value, fieldName, node) {
     if (value === undefined) {
         return {};
     }
     if (typeof value === 'string' && value.trim() === '') {
         return {};
     }
-    return parseRequiredDataObject(value, fieldName);
+    return parseRequiredDataObject(value, fieldName, node);
 }
-function parseRequiredDataObject(value, fieldName) {
+function parseRequiredDataObject(value, fieldName, node) {
     if (typeof value === 'string') {
         try {
             const parsedValue = JSON.parse(value);
@@ -658,9 +647,9 @@ function parseRequiredDataObject(value, fieldName) {
         }
         catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown JSON parse error';
-            // Helper parse errors are converted into node-facing errors by the node execution wrapper.
-            // eslint-disable-next-line @n8n/community-nodes/require-node-api-error
-            throw new SyntaxError(`${fieldName} must be valid JSON. ${message}`);
+            throw new n8n_workflow_1.NodeApiError(node, {
+                message: `${fieldName} must be valid JSON. ${message}`,
+            });
         }
     }
     return ensureDataObject(value, fieldName);
@@ -671,3 +660,117 @@ function ensureDataObject(value, fieldName) {
     }
     return value;
 }
+const GENIUS_REFERRALS_VALIDATION_NODE = {
+    id: 'genius-referrals-validation',
+    name: 'Genius Referrals',
+    type: 'n8n-nodes-genius-referrals.geniusReferrals',
+    typeVersion: 1,
+    position: [0, 0],
+    parameters: {},
+};
+const OPERATION_PROPERTIES = [
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'accountsGetAll',
+        displayOptions: {
+            show: {
+                resource: ['accounts'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.accounts,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'advocatesDeleteAll',
+        displayOptions: {
+            show: {
+                resource: ['advocates'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.advocates,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'bonusesGetAll',
+        displayOptions: {
+            show: {
+                resource: ['bonuses'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.bonuses,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'campaignsGetAll',
+        displayOptions: {
+            show: {
+                resource: ['campaigns'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.campaigns,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'redemptionRequestsGetAll',
+        displayOptions: {
+            show: {
+                resource: ['redemptionRequests'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.redemptionRequests,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'referralsGetAll',
+        displayOptions: {
+            show: {
+                resource: ['referrals'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.referrals,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'reportsRevenue',
+        displayOptions: {
+            show: {
+                resource: ['reports'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.reports,
+    },
+    {
+        displayName: 'Operation',
+        name: 'operation',
+        type: 'options',
+        default: 'utilitiesTestAuthentication',
+        displayOptions: {
+            show: {
+                resource: ['utilities'],
+            },
+        },
+        noDataExpression: true,
+        options: exports.GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.utilities,
+    },
+];

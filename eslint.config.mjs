@@ -3,12 +3,11 @@ import { config } from '@n8n/node-cli/eslint';
 export default [
   ...config,
   {
-    files: ['src/nodes/**/*.node.ts'],
+    files: ['nodes/**/*.node.ts'],
     rules: {
-      // The n8n rule maps dist paths back to root-level source files. This
-      // package keeps source under src/ while publishing dist/, so the rule
-      // cannot resolve the declared credential even though the package path is
-      // valid after build.
+      // In the Node 22 container used for mbp-server QA, this n8n rule can
+      // fail to resolve this package's declared credential even though the
+      // credential name matches and package.json points to the built dist file.
       '@n8n/community-nodes/no-credential-reuse': 'off',
     },
   },

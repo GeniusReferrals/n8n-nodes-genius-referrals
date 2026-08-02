@@ -8,6 +8,7 @@ const {
   assertNoNpmTokenEnv,
   assertPublishTokenForMode,
   assertSupportedToolchain,
+  buildApprovalPacketFreshnessReport,
   buildPublicationEvidence,
   classifyRegistryVersion,
   readReleaseManifest,
@@ -46,6 +47,50 @@ function approvalComment(overrides = {}) {
       overrides.extraBody ?? '',
     ].join('\n'),
     ...overrides,
+  };
+}
+
+function approvalPacketComment({ id = 654321, createdAt = '2026-09-01T12:00:00Z', releaseManifest = manifest } = {}) {
+  return {
+    id,
+    html_url: `https://github.com/${releaseManifest.approval.repository}/issues/1#issuecomment-${id}`,
+    created_at: createdAt,
+    body: [
+      '[ProductionApprovalRequest] Agent=Aegis | SourceIssue=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200 | PullRequest=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/pull/201',
+      '',
+      '```text',
+      '[ProductionApproval]',
+      'Decision=APPROVED',
+      `Package=${releaseManifest.package.name}`,
+      `Version=${releaseManifest.package.version}`,
+      `Commit=${releaseManifest.source.commit}`,
+      `FinalReleaseCommit=${releaseManifest.release.finalWorkflowCommit}`,
+      `PackageSHA256=${releaseManifest.artifact.sha256}`,
+      'AuthorizedActions=npm publication',
+      'PreparedRunID=987654',
+      'PreparedArtifactID=24680',
+      '```',
+    ].join('\n'),
+  };
+}
+
+function futureManifest(overrides = {}) {
+  return {
+    ...manifest,
+    package: {
+      ...manifest.package,
+      version: overrides.version ?? '9.9.9',
+    },
+    source: {
+      commit: overrides.sourceCommit ?? '1111111111111111111111111111111111111111',
+    },
+    release: {
+      finalWorkflowCommit: overrides.finalWorkflowCommit ?? '2222222222222222222222222222222222222222',
+    },
+    artifact: {
+      sha256: overrides.sha256 ?? '3333333333333333333333333333333333333333333333333333333333333333',
+      sha512: manifest.artifact.sha512,
+    },
   };
 }
 
@@ -184,6 +229,157 @@ test('approval gate rejects prepared artifact reuse for a different release', ()
         ],
       }),
     /already consumed for a different release/,
+  );
+});
+
+test('approval packet freshness is scoped to the n8n community node repository', () => {
+  const otherRepoManifest = {
+    ...futureManifest(),
+    approval: {
+      ...manifest.approval,
+      repository: 'GeniusReferrals/other-package',
+    },
+  };
+
+  const report = buildApprovalPacketFreshnessReport({
+    approvalComment: approvalComment({ created_at: '2026-09-01T12:05:00Z' }),
+    manifest: otherRepoManifest,
+    preparedRunId: '987654',
+    preparedArtifactId: '24680',
+    approvalIssueComments: [
+      {
+        ...approvalPacketComment({ releaseManifest: otherRepoManifest }),
+        body: approvalPacketComment({ releaseManifest: otherRepoManifest }).body.replaceAll(
+          'GeniusReferrals/n8n-nodes-genius-referrals',
+          'GeniusReferrals/other-package',
+        ),
+      },
+    ],
+    sourceIssueComments: [
+      {
+        id: 777,
+        created_at: '2026-09-01T12:10:00Z',
+        body: '[SentinelQaEvidence] Result=PASS | GitHub=https://github.com/GeniusReferrals/other-package/issues/200',
+      },
+    ],
+  });
+
+  assert.equal(report.applied, false);
+  assert.equal(report.reason, 'REPOSITORY_FILTER_NOT_MATCHED');
+  assert.equal(report.stale, false);
+});
+
+test('approval packet freshness dry-run reports future stale release evidence without hard-coded release identity', () => {
+  const releaseManifest = futureManifest();
+  const packet = approvalPacketComment({ releaseManifest, createdAt: '2026-09-01T12:00:00Z' });
+  const approval = approvalComment({
+    id: 999999,
+    created_at: '2026-09-01T12:01:00Z',
+    body: approvalComment().body
+      .replace(`Version=${manifest.package.version}`, `Version=${releaseManifest.package.version}`)
+      .replace(`Commit=${manifest.source.commit}`, `Commit=${releaseManifest.source.commit}`)
+      .replace(`FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`, `FinalReleaseCommit=${releaseManifest.release.finalWorkflowCommit}`)
+      .replace(`PackageSHA256=${manifest.artifact.sha256}`, `PackageSHA256=${releaseManifest.artifact.sha256}`),
+  });
+
+  const report = buildApprovalPacketFreshnessReport({
+    approvalComment: approval,
+    manifest: releaseManifest,
+    preparedRunId: '987654',
+    preparedArtifactId: '24680',
+    approvalIssueComments: [packet],
+    sourceIssueComments: [
+      {
+        id: 111,
+        html_url: 'https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200#issuecomment-111',
+        created_at: '2026-09-01T12:02:00Z',
+        body: '[SentinelQaEvidence] Project=gr-agent-led-dev-delivery | GitHub=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200 | PullRequest=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/pull/201 | Result=PASS | TestedSHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+      {
+        id: 112,
+        html_url: 'https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200#issuecomment-112',
+        created_at: '2026-09-01T12:03:00Z',
+        body: '[MbpEnvironmentGate] Project=gr-agent-led-dev-delivery | Phase=Stage | Result=PASS | GitHub=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200 | PullRequest=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/pull/201',
+      },
+      {
+        id: 113,
+        html_url: 'https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200#issuecomment-113',
+        created_at: '2026-09-01T12:04:00Z',
+        body: '[RiskDisposition] Agent=Ledger | Result=PASS | GitHub=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200 | PullRequest=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/pull/201',
+      },
+      {
+        id: 114,
+        html_url: 'https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200#issuecomment-114',
+        created_at: '2026-09-01T12:05:00Z',
+        body: '[MergeController] Agent=Aegis | Result=MERGED | GitHub=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200 | PullRequest=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/pull/201',
+      },
+    ],
+    publicationIssueComments: [
+      {
+        id: 115,
+        html_url: 'https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/23#issuecomment-115',
+        created_at: '2026-09-01T12:06:00Z',
+        body: [
+          '[PublicationEvidence]',
+          `Package=${releaseManifest.package.name}`,
+          `Version=${releaseManifest.package.version}`,
+          'RegistryStatus=published',
+        ].join('\n'),
+      },
+    ],
+  });
+
+  assert.equal(report.applied, true);
+  assert.equal(report.stale, true);
+  assert.equal(report.affected.repository, 'GeniusReferrals/n8n-nodes-genius-referrals');
+  assert.equal(report.affected.sourceIssueNumber, 200);
+  assert.equal(report.affected.pullRequestNumber, 201);
+  assert.equal(report.affected.packetCommentId, '654321');
+  assert.deepEqual(
+    report.staleReasons.map((reason) => reason.reason),
+    [
+      'QA_EVIDENCE_CHANGED',
+      'MBP_STAGE_EVIDENCE_CHANGED',
+      'LEDGER_EVIDENCE_CHANGED',
+      'MERGE_EVIDENCE_CHANGED',
+      'NPM_REGISTRY_READBACK_CHANGED',
+    ],
+  );
+});
+
+test('approval gate rejects stale approval packet after future evidence chain changes', () => {
+  const releaseManifest = futureManifest();
+  const packet = approvalPacketComment({ releaseManifest, createdAt: '2026-09-01T12:00:00Z' });
+  const approval = approvalComment({
+    id: 999999,
+    created_at: '2026-09-01T12:01:00Z',
+    body: approvalComment().body
+      .replace(`Version=${manifest.package.version}`, `Version=${releaseManifest.package.version}`)
+      .replace(`Commit=${manifest.source.commit}`, `Commit=${releaseManifest.source.commit}`)
+      .replace(`FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`, `FinalReleaseCommit=${releaseManifest.release.finalWorkflowCommit}`)
+      .replace(`PackageSHA256=${manifest.artifact.sha256}`, `PackageSHA256=${releaseManifest.artifact.sha256}`),
+  });
+
+  assert.throws(
+    () =>
+      verifyApprovalComment({
+        approvalComment: approval,
+        manifest: releaseManifest,
+        expectedCommentId: '999999',
+        preparedRunId: '987654',
+        preparedArtifactId: '24680',
+        currentWorkflowCommit: releaseManifest.release.finalWorkflowCommit,
+        issueComments: [],
+        approvalIssueComments: [packet],
+        sourceIssueComments: [
+          {
+            id: 222,
+            created_at: '2026-09-01T12:02:00Z',
+            body: '[MbpEnvironmentGate] Project=gr-agent-led-dev-delivery | Phase=Stage | Result=PASS | GitHub=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200',
+          },
+        ],
+      }),
+    /Approval packet is stale: MBP_STAGE_EVIDENCE_CHANGED/,
   );
 });
 

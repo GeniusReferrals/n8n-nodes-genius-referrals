@@ -6,6 +6,7 @@ const { join, resolve } = require('node:path');
 
 const MIN_NODE_MAJOR = 24;
 const MIN_NPM_VERSION = '11.5.1';
+const NPM_RELEASE_APPROVAL_FRESHNESS_REPOSITORY = 'GeniusReferrals/n8n-nodes-genius-referrals';
 
 function readJsonFile(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -193,6 +194,23 @@ function parseStructuredFields(body) {
   };
 }
 
+function parseInlineStructuredFields(body) {
+  const fields = {};
+  const parts = String(body ?? '').split(/\r?\n|\|/);
+
+  for (const rawPart of parts) {
+    const part = rawPart.trim();
+    const match = /^(?:\[[^\]]+\]\s*)?([A-Za-z][A-Za-z0-9]+)=(.+)$/.exec(part);
+    if (!match) {
+      continue;
+    }
+
+    fields[match[1]] = match[2].trim();
+  }
+
+  return fields;
+}
+
 function fieldValue(fields, names) {
   for (const name of names) {
     if (Object.prototype.hasOwnProperty.call(fields, name)) {
@@ -201,6 +219,243 @@ function fieldValue(fields, names) {
   }
 
   return undefined;
+}
+
+function parseGithubIssueNumberFromUrl(value, repository) {
+  const escapedRepository = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`https://github\\.com/${escapedRepository}/issues/(\\d+)`).exec(String(value ?? ''));
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function parseGithubPullNumberFromUrl(value, repository) {
+  const escapedRepository = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`https://github\\.com/${escapedRepository}/pull/(\\d+)`).exec(String(value ?? ''));
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function parseNamedGithubIssueNumber(body, fieldName, repository) {
+  const escapedRepository = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`${fieldName}=https://github\\.com/${escapedRepository}/issues/(\\d+)`).exec(
+    String(body ?? ''),
+  );
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function parseNamedGithubPullNumber(body, fieldName, repository) {
+  const escapedRepository = repository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`${fieldName}=https://github\\.com/${escapedRepository}/pull/(\\d+)`).exec(
+    String(body ?? ''),
+  );
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function commentTimestamp(comment) {
+  const timestamp = Date.parse(comment?.created_at ?? '');
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function commentUrl(comment) {
+  return comment?.html_url ?? `issue-comment:${comment?.id ?? 'unknown'}`;
+}
+
+function approvalPacketMatchesRelease({ packetComment, manifest, preparedRunId, preparedArtifactId }) {
+  const body = packetComment?.body ?? '';
+  if (!body.includes('[ProductionApprovalRequest]')) {
+    return false;
+  }
+
+  const parsed = parseStructuredFields(body);
+  const fields = parsed.fields;
+
+  return (
+    parsed.hasProductionApprovalMarker &&
+    fieldValue(fields, ['Package']) === manifest.package.name &&
+    fieldValue(fields, ['Version']) === manifest.package.version &&
+    normalizeHexField(fieldValue(fields, ['Commit'])) === manifest.source.commit &&
+    normalizeHexField(fieldValue(fields, ['FinalReleaseCommit'])) === manifest.release.finalWorkflowCommit &&
+    normalizeHexField(fieldValue(fields, ['PackageSHA256', 'SHA256'])) === manifest.artifact.sha256 &&
+    fieldValue(fields, ['PreparedRunID', 'WorkflowRunID', 'RunID']) === String(preparedRunId) &&
+    fieldValue(fields, ['PreparedArtifactID', 'ArtifactID']) === String(preparedArtifactId)
+  );
+}
+
+function latestMatchingApprovalPacket({ approvalComment, manifest, preparedRunId, preparedArtifactId, approvalIssueComments }) {
+  const approvalCreatedAt = commentTimestamp(approvalComment);
+
+  return (approvalIssueComments ?? [])
+    .filter((comment) =>
+      approvalPacketMatchesRelease({
+        packetComment: comment,
+        manifest,
+        preparedRunId,
+        preparedArtifactId,
+      }),
+    )
+    .filter((comment) => {
+      const createdAt = commentTimestamp(comment);
+      return createdAt !== null && (approvalCreatedAt === null || createdAt <= approvalCreatedAt);
+    })
+    .sort((left, right) => commentTimestamp(right) - commentTimestamp(left))[0] ?? null;
+}
+
+function evidenceEventFromComment(comment, manifest) {
+  const body = String(comment?.body ?? '');
+  const parsed = parseStructuredFields(body);
+  const fields = {
+    ...parseInlineStructuredFields(body),
+    ...parsed.fields,
+  };
+
+  const event = (reason, marker) => ({
+    reason,
+    marker,
+    commentId: String(comment.id ?? 'unknown'),
+    createdAt: comment.created_at ?? 'unknown',
+    url: commentUrl(comment),
+  });
+
+  if (body.includes('[DevDeliveryCheckpoint]') && body.includes(`Repository=${manifest.approval.repository}`)) {
+    return event('FINAL_RELEASE_SOURCE_EVIDENCE_CHANGED', 'DevDeliveryCheckpoint');
+  }
+
+  if (
+    body.includes('[SentinelQaEvidence]') &&
+    fieldValue(fields, ['Result']) === 'PASS' &&
+    body.includes(`GitHub=https://github.com/${manifest.approval.repository}/issues/`)
+  ) {
+    return event('QA_EVIDENCE_CHANGED', 'SentinelQaEvidence');
+  }
+
+  if (
+    body.includes('[MbpEnvironmentGate]') &&
+    fieldValue(fields, ['Result']) === 'PASS' &&
+    fieldValue(fields, ['Phase']) === 'QA' &&
+    body.includes(`GitHub=https://github.com/${manifest.approval.repository}/issues/`)
+  ) {
+    return event('MBP_QA_EVIDENCE_CHANGED', 'MbpEnvironmentGate:QA');
+  }
+
+  if (
+    body.includes('[MbpEnvironmentGate]') &&
+    fieldValue(fields, ['Result']) === 'PASS' &&
+    fieldValue(fields, ['Phase']) === 'Stage' &&
+    body.includes(`GitHub=https://github.com/${manifest.approval.repository}/issues/`)
+  ) {
+    return event('MBP_STAGE_EVIDENCE_CHANGED', 'MbpEnvironmentGate:Stage');
+  }
+
+  if (
+    body.includes('[RiskDisposition]') &&
+    fieldValue(fields, ['Result']) === 'PASS' &&
+    body.includes(`GitHub=https://github.com/${manifest.approval.repository}/issues/`)
+  ) {
+    return event('LEDGER_EVIDENCE_CHANGED', 'RiskDisposition');
+  }
+
+  if (
+    body.includes('[MergeController]') &&
+    fieldValue(fields, ['Result']) === 'MERGED' &&
+    body.includes(`GitHub=https://github.com/${manifest.approval.repository}/issues/`)
+  ) {
+    return event('MERGE_EVIDENCE_CHANGED', 'MergeController');
+  }
+
+  if (
+    parsed.hasPublicationEvidenceMarker &&
+    fieldValue(fields, ['Package']) === manifest.package.name &&
+    fieldValue(fields, ['Version']) === manifest.package.version
+  ) {
+    return event('NPM_REGISTRY_READBACK_CHANGED', 'PublicationEvidence');
+  }
+
+  return null;
+}
+
+function buildApprovalPacketFreshnessReport({
+  approvalComment,
+  manifest,
+  preparedRunId,
+  preparedArtifactId,
+  approvalIssueComments,
+  sourceIssueComments = [],
+  publicationIssueComments = [],
+}) {
+  const report = {
+    repository: manifest.approval.repository,
+    applied: manifest.approval.repository === NPM_RELEASE_APPROVAL_FRESHNESS_REPOSITORY,
+    approvalCommentId: String(approvalComment?.id ?? 'unknown'),
+    stale: false,
+    staleReasons: [],
+    affected: {
+      repository: manifest.approval.repository,
+      approvalIssueNumber: manifest.approval.issueNumber,
+      sourceIssueNumber: null,
+      pullRequestNumber: null,
+      publicationEvidenceIssueNumber: manifest.publication.evidenceIssueNumber,
+      packetCommentId: null,
+      packetCommentUrl: null,
+    },
+  };
+
+  if (!report.applied) {
+    report.reason = 'REPOSITORY_FILTER_NOT_MATCHED';
+    return report;
+  }
+
+  if (!approvalIssueComments) {
+    report.applied = false;
+    report.reason = 'APPROVAL_ISSUE_COMMENTS_NOT_PROVIDED';
+    return report;
+  }
+
+  const packetComment = latestMatchingApprovalPacket({
+    approvalComment,
+    manifest,
+    preparedRunId,
+    preparedArtifactId,
+    approvalIssueComments,
+  });
+
+  if (!packetComment) {
+    report.stale = true;
+    report.staleReasons.push({
+      reason: 'FRESH_APPROVAL_PACKET_REQUIRED',
+      marker: 'ProductionApprovalRequest',
+      commentId: null,
+      createdAt: null,
+      url: null,
+    });
+    return report;
+  }
+
+  const packetCreatedAt = commentTimestamp(packetComment);
+  const sourceIssueNumber =
+    parseNamedGithubIssueNumber(packetComment.body, 'SourceIssue', manifest.approval.repository) ??
+    parseGithubIssueNumberFromUrl(packetComment.body, manifest.approval.repository);
+  const pullRequestNumber =
+    parseNamedGithubPullNumber(packetComment.body, 'PullRequest', manifest.approval.repository) ??
+    parseGithubPullNumberFromUrl(packetComment.body, manifest.approval.repository);
+
+  report.affected.sourceIssueNumber = sourceIssueNumber;
+  report.affected.pullRequestNumber = pullRequestNumber;
+  report.affected.packetCommentId = String(packetComment.id);
+  report.affected.packetCommentUrl = commentUrl(packetComment);
+
+  const relevantEvents = [...sourceIssueComments, ...publicationIssueComments]
+    .map((comment) => ({
+      comment,
+      event: evidenceEventFromComment(comment, manifest),
+      timestamp: commentTimestamp(comment),
+    }))
+    .filter(({ event, timestamp }) => event && timestamp !== null)
+    .filter(({ timestamp }) => packetCreatedAt !== null && timestamp > packetCreatedAt);
+
+  for (const { event } of relevantEvents) {
+    report.staleReasons.push(event);
+  }
+
+  report.stale = report.staleReasons.length > 0;
+  return report;
 }
 
 function actionListIncludes(value, requiredAction) {
@@ -265,6 +520,8 @@ function verifyApprovalComment({
   preparedArtifactId,
   currentWorkflowCommit,
   issueComments = [],
+  approvalIssueComments,
+  sourceIssueComments,
 }) {
   if (expectedCommentId && String(approvalComment.id) !== String(expectedCommentId)) {
     throw new Error(`Fetched approval comment ${approvalComment.id}; expected ${expectedCommentId}`);
@@ -329,11 +586,27 @@ function verifyApprovalComment({
 
   assertPreparedArtifactNotConsumedForDifferentRelease(issueComments, manifest, preparedRunId, preparedArtifactId);
 
+  const freshnessReport = buildApprovalPacketFreshnessReport({
+    approvalComment,
+    manifest,
+    preparedRunId,
+    preparedArtifactId,
+    approvalIssueComments,
+    sourceIssueComments,
+    publicationIssueComments: issueComments,
+  });
+
+  if (freshnessReport.applied && freshnessReport.stale) {
+    const reasonList = freshnessReport.staleReasons.map((reason) => reason.reason).join(',');
+    throw new Error(`Approval packet is stale: ${reasonList}`);
+  }
+
   return {
     approvalCommentId: String(approvalComment.id),
     approvalAuthor: approvalComment.user.login,
     issueUrl: approvalComment.issue_url,
     fields,
+    freshness: freshnessReport,
   };
 }
 
@@ -509,6 +782,7 @@ module.exports = {
   assertSupportedToolchain,
   classifyRegistryVersion,
   buildPublicationEvidence,
+  buildApprovalPacketFreshnessReport,
   parseStructuredFields,
   readJsonFile,
   readReleaseManifest,

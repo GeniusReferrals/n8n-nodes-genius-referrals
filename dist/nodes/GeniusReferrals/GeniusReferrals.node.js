@@ -288,7 +288,7 @@ class GeniusReferrals {
         for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
             try {
                 const parameters = getNodeOperationParameters(this, itemIndex);
-                const request = (0, GeniusReferrals_operation_1.buildGeniusReferralsRequestDefinition)(parameters);
+                const request = (0, GeniusReferrals_operation_1.buildGeniusReferralsRequestDefinition)(parameters, node);
                 const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthentication)(this.helpers.httpRequestWithAuthentication.bind(this.helpers), {
                     ...request,
                     baseUrl: credentials.baseUrl,

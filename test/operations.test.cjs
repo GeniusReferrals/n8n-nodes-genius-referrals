@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   buildGeniusReferralsRequestDefinition,
+  createOperationProperties,
   GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE,
   GENIUS_REFERRALS_RESOURCE_OPTIONS,
 } = require('../dist/nodes/GeniusReferrals/GeniusReferrals.operation.js');
@@ -41,6 +42,24 @@ test('operation options expose the main approved resource coverage', () => {
       (entry) => entry.value === 'reportsTopAdvocates',
     ),
     true,
+  );
+});
+
+test('operation properties expose scanner-compliant resource defaults', () => {
+  const properties = createOperationProperties();
+
+  assert.deepEqual(
+    properties.map((property) => [property.displayOptions.show.resource[0], property.default]),
+    [
+      ['accounts', 'accountsGetAll'],
+      ['advocates', 'advocatesDeleteAll'],
+      ['bonuses', 'bonusesGetAll'],
+      ['campaigns', 'campaignsGetAll'],
+      ['redemptionRequests', 'redemptionRequestsGetAll'],
+      ['referrals', 'referralsGetAll'],
+      ['reports', 'reportsRevenue'],
+      ['utilities', 'utilitiesTestAuthentication'],
+    ],
   );
 });
 
@@ -149,6 +168,6 @@ test('json fields reject invalid payload strings with a clear error', () => {
         payloadJson: '{"broken"',
         resource: 'redemptionRequests',
       }),
-    /Payload JSON must be valid JSON/,
+    (error) => error.constructor.name === 'NodeApiError' && /Payload JSON must be valid JSON/.test(error.message),
   );
 });

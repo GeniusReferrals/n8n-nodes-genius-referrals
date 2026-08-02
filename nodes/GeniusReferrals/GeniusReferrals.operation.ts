@@ -1,4 +1,5 @@
-import type { IDataObject, IHttpRequestMethods, INodeProperties } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
+import type { IDataObject, IHttpRequestMethods, INode, INodeProperties, JsonObject } from 'n8n-workflow';
 
 export type GeniusReferralsResource =
   | 'accounts'
@@ -586,9 +587,10 @@ export const GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE: Record<
 
 export function buildGeniusReferralsRequestDefinition(
   parameters: GeniusReferralsNodeParameters,
+  node: INode = GENIUS_REFERRALS_VALIDATION_NODE,
 ): GeniusReferralsBuiltRequest {
   const definition = getOperationDefinition(parameters.operation);
-  const query = parseOptionalDataObject(parameters.queryJson, 'Query JSON');
+  const query = parseOptionalDataObject(parameters.queryJson, 'Query JSON', node);
   const request: GeniusReferralsBuiltRequest = {
     endpoint: definition.endpoint(parameters),
     method: definition.method,
@@ -612,6 +614,7 @@ export function buildGeniusReferralsRequestDefinition(
       definition.bodyStrategy,
       definition.bodyWrapperKey,
       parameters.payloadJson,
+      node,
     );
   }
 
@@ -619,22 +622,7 @@ export function buildGeniusReferralsRequestDefinition(
 }
 
 export function createOperationProperties(): INodeProperties[] {
-  return (Object.entries(GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE) as Array<
-    [GeniusReferralsResource, Array<{ description: string; name: string; value: string }>]
-  // eslint-disable-next-line n8n-nodes-base/node-param-default-missing
-  >).map(([resource, options]) => ({
-    displayName: 'Operation',
-    name: 'operation',
-    type: 'options',
-    default: options[0]?.value ?? '',
-    displayOptions: {
-      show: {
-        resource: [resource],
-      },
-    },
-    noDataExpression: true,
-    options,
-  }));
+  return OPERATION_PROPERTIES;
 }
 
 export function getOperationsForResource(resource: GeniusReferralsResource): string[] {
@@ -751,12 +739,13 @@ function buildRequestBody(
   strategy: 'raw' | 'wrapped',
   wrapperKey: string | undefined,
   payloadValue: IDataObject | string | undefined,
+  node: INode,
 ): IDataObject {
   if (payloadValue === undefined) {
     throw new Error('Payload JSON must contain a JSON object.');
   }
 
-  const payload = parseRequiredDataObject(payloadValue, 'Payload JSON');
+  const payload = parseRequiredDataObject(payloadValue, 'Payload JSON', node);
 
   if (strategy === 'raw') {
     return payload;
@@ -811,6 +800,7 @@ function getOperationDefinition(operationValue: string): GeniusReferralsOperatio
 function parseOptionalDataObject(
   value: IDataObject | string | undefined,
   fieldName: string,
+  node: INode,
 ): IDataObject {
   if (value === undefined) {
     return {};
@@ -820,12 +810,13 @@ function parseOptionalDataObject(
     return {};
   }
 
-  return parseRequiredDataObject(value, fieldName);
+  return parseRequiredDataObject(value, fieldName, node);
 }
 
 function parseRequiredDataObject(
   value: IDataObject | string,
   fieldName: string,
+  node: INode,
 ): IDataObject {
   if (typeof value === 'string') {
     try {
@@ -833,9 +824,9 @@ function parseRequiredDataObject(
       return ensureDataObject(parsedValue, fieldName);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown JSON parse error';
-      // Helper parse errors are converted into node-facing errors by the node execution wrapper.
-      // eslint-disable-next-line @n8n/community-nodes/require-node-api-error
-      throw new SyntaxError(`${fieldName} must be valid JSON. ${message}`);
+      throw new NodeApiError(node, {
+        message: `${fieldName} must be valid JSON. ${message}`,
+      } as JsonObject);
     }
   }
 
@@ -849,3 +840,119 @@ function ensureDataObject(value: unknown, fieldName: string): IDataObject {
 
   return value as IDataObject;
 }
+
+const GENIUS_REFERRALS_VALIDATION_NODE: INode = {
+  id: 'genius-referrals-validation',
+  name: 'Genius Referrals',
+  type: 'n8n-nodes-genius-referrals.geniusReferrals',
+  typeVersion: 1,
+  position: [0, 0],
+  parameters: {},
+};
+
+const OPERATION_PROPERTIES: INodeProperties[] = [
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'accountsGetAll',
+    displayOptions: {
+      show: {
+        resource: ['accounts'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.accounts,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'advocatesDeleteAll',
+    displayOptions: {
+      show: {
+        resource: ['advocates'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.advocates,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'bonusesGetAll',
+    displayOptions: {
+      show: {
+        resource: ['bonuses'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.bonuses,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'campaignsGetAll',
+    displayOptions: {
+      show: {
+        resource: ['campaigns'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.campaigns,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'redemptionRequestsGetAll',
+    displayOptions: {
+      show: {
+        resource: ['redemptionRequests'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.redemptionRequests,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'referralsGetAll',
+    displayOptions: {
+      show: {
+        resource: ['referrals'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.referrals,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'reportsRevenue',
+    displayOptions: {
+      show: {
+        resource: ['reports'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.reports,
+  },
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    default: 'utilitiesTestAuthentication',
+    displayOptions: {
+      show: {
+        resource: ['utilities'],
+      },
+    },
+    noDataExpression: true,
+    options: GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE.utilities,
+  },
+];

@@ -1,11 +1,9 @@
 import { NodeConnectionTypes } from 'n8n-workflow';
-import type { INodeType, ILoadOptionsFunctions, INodeExecutionData, INodeProperties, IExecuteFunctions } from 'n8n-workflow';
+import type { ILoadOptionsFunctions, INode, INodeExecutionData, INodeProperties, INodeType, IExecuteFunctions } from 'n8n-workflow';
 type GeniusReferralsExecuteContext = IExecuteFunctions & {
     continueOnFail(): boolean;
     getInputData(): INodeExecutionData[];
-    getNode(): {
-        [key: string]: unknown;
-    };
+    getNode(): INode;
     getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
 };
 type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {

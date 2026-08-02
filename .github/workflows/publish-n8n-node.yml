@@ -8,9 +8,12 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'eslint.config.mjs'
+      - 'credentials/**'
+      - 'lib/**'
+      - 'nodes/**'
       - 'scripts/**'
-      - 'src/**'
       - 'test/**'
+      - 'types/**'
   workflow_dispatch:
     inputs:
       release_action:
@@ -209,6 +212,13 @@ jobs:
           status="$(node -e "process.stdout.write(require(process.env.RUNNER_TEMP + '/registry-before.json').status)")"
           printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
 
+      - name: Scan community package before Creator Portal evidence
+        if: ${{ steps.registry_before.outputs.status == 'published' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run release:scan-community
+
       - name: Record idempotent success
         if: ${{ steps.registry_before.outputs.status == 'published' }}
         env:
@@ -233,6 +243,7 @@ jobs:
             echo "- Prepared run ID: $PREPARED_RUN_ID"
             echo "- Prepared artifact ID: $PREPARED_ARTIFACT_ID"
             echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Creator Portal scanner: PASS"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish exact tarball with provenance
@@ -262,6 +273,13 @@ jobs:
             --manifest "$RELEASE_MANIFEST_PATH" \
             --summary-file "$RUNNER_TEMP/registry-after.json"
 
+      - name: Scan community package before Creator Portal evidence
+        if: ${{ steps.registry_before.outputs.status != 'published' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run release:scan-community
+
       - name: Record publication evidence
         if: ${{ steps.registry_before.outputs.status != 'published' }}
         env:
@@ -287,5 +305,6 @@ jobs:
             echo "- Prepared artifact ID: $PREPARED_ARTIFACT_ID"
             echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "- Registry verification: PASS"
+            echo "- Creator Portal scanner: PASS"
             echo "- Provenance: requested with npm publish --provenance; see npm registry attestation metadata when available"
           } >> "$GITHUB_STEP_SUMMARY"

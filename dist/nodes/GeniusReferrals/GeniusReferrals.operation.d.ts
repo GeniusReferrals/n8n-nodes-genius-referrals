@@ -1,4 +1,4 @@
-import type { IDataObject, IHttpRequestMethods, INodeProperties } from 'n8n-workflow';
+import type { IDataObject, IHttpRequestMethods, INode, INodeProperties } from 'n8n-workflow';
 export type GeniusReferralsResource = 'accounts' | 'advocates' | 'bonuses' | 'campaigns' | 'redemptionRequests' | 'referrals' | 'reports' | 'utilities';
 export type GeniusReferralsParameterName = 'accountSlug' | 'advocateToken' | 'bonusId' | 'bonusesRedemptionMethodSlug' | 'campaignSlug' | 'clientSlug' | 'currencyCode' | 'queryJson' | 'payloadJson' | 'redemptionRequestId' | 'referralId' | 'referralOriginSlug' | 'requestActionSlug' | 'requestStatusSlug' | 'traceId';
 export interface GeniusReferralsNodeParameters {
@@ -35,7 +35,7 @@ export declare const GENIUS_REFERRALS_OPERATION_OPTIONS_BY_RESOURCE: Record<Geni
     name: string;
     value: string;
 }>>;
-export declare function buildGeniusReferralsRequestDefinition(parameters: GeniusReferralsNodeParameters): GeniusReferralsBuiltRequest;
+export declare function buildGeniusReferralsRequestDefinition(parameters: GeniusReferralsNodeParameters, node?: INode): GeniusReferralsBuiltRequest;
 export declare function createOperationProperties(): INodeProperties[];
 export declare function getOperationsForResource(resource: GeniusReferralsResource): string[];
 export declare function getOperationsWithBody(): string[];

@@ -4,10 +4,11 @@ import {
 } from 'n8n-workflow';
 import type {
   IDataObject,
-  INodeType,
   ILoadOptionsFunctions,
+  INode,
   INodeExecutionData,
   INodeProperties,
+  INodeType,
   IExecuteFunctions,
 } from 'n8n-workflow';
 import { getGeniusReferralsApiCredentials, grApiRequestWithAuthentication } from '../../lib/client/GeniusReferralsApiClient';
@@ -23,7 +24,7 @@ import {
 type GeniusReferralsExecuteContext = IExecuteFunctions & {
   continueOnFail(): boolean;
   getInputData(): INodeExecutionData[];
-  getNode(): { [key: string]: unknown };
+  getNode(): INode;
   getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
 };
 
@@ -318,7 +319,7 @@ export class GeniusReferrals implements INodeType {
     for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
       try {
         const parameters = getNodeOperationParameters(this, itemIndex);
-        const request = buildGeniusReferralsRequestDefinition(parameters);
+        const request = buildGeniusReferralsRequestDefinition(parameters, node);
         const response = await grApiRequestWithAuthentication(
           this.helpers.httpRequestWithAuthentication.bind(this.helpers),
           {

@@ -4,6 +4,22 @@
 
 Track the remaining work needed before `n8n-nodes-genius-referrals` is published to npm and submitted for n8n community-node verification.
 
+## Current candidate
+
+- Package candidate: `n8n-nodes-genius-referrals@0.1.3`
+- Purpose: prepare a fresh npm version for Creator Portal revalidation after
+  the `0.1.2` candidate completed source, QA, Stage, Ledger, and merge-readiness
+  gates.
+- Publication status: not published by issue #33.
+- Creator Portal status: not resubmitted by issue #33.
+- Required next gates: Bolt developer proof, Sentinel `mbp-server:qa`,
+  Sentinel `mbp-server:stage`, Ledger release-risk disposition, then Aegis
+  release/publish approval orchestration.
+- Controller invariant: `POST_PUBLISH_SCAN_AUDIT_REQUIRED`. Public
+  `scan-community-package` validation is post-publish/manual Creator Portal
+  audit evidence for `0.1.3`, not a pre-merge blocker for the unpublished
+  candidate.
+
 ## Package checklist
 
 - [x] Package name uses the `n8n-nodes-` community-node convention
@@ -34,6 +50,15 @@ These steps should not be performed without Alain approval:
 1. Publish the package to npm under the approved maintainer/org account.
 2. Submit the community node to the n8n Creator Portal or verification workflow.
 3. Approve the final version number, release notes, and any public-facing listing copy.
+
+Before npm publication, the ticket or approval packet must record the approved
+package name, version, source commit, final release/workflow commit, package
+SHA-256, prepared workflow run ID, prepared artifact ID, and the exact Alain
+`[ProductionApproval]` comment ID.
+
+After approved publication, the public n8n package validator or Creator Portal
+audit record must include package name, version, registry tarball URL,
+checksum or integrity, validator result, and follow-up owner.
 
 ## Known limitations
 

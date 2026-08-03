@@ -149,8 +149,11 @@ The detailed release checklist lives in [docs/release-readiness.md](docs/release
 
 Current release notes:
 
+- `0.1.3` is a package candidate prepared for Creator Portal revalidation after
+  the `0.1.2` source, QA, Stage, Ledger, and merge-readiness gates completed.
 - Package naming and `n8n` metadata are in place for a community node package.
 - TypeScript build output is generated into `dist/`, and the `dist/` metadata paths advertised in `package.json` are committed so n8n Creator Portal repository validation can resolve the credential and node files.
 - Repo tests cover request wrapping, query requirements, and API client error mapping.
 - `lint` runs `n8n-node lint` with the package's n8n community-node rules.
-- Final npm publish and n8n Creator Portal submission require Alain approval.
+- Final npm publish and n8n Creator Portal submission require Alain approval
+  and must happen outside this implementation ticket.

@@ -4,6 +4,7 @@ const { get } = require('node:https');
 const { resolve } = require('node:path');
 
 const {
+  buildApprovalPacketFreshnessReport,
   readReleaseManifest,
   verifyApprovalComment,
   writeJsonFile,
@@ -17,6 +18,7 @@ function parseArgs(argv) {
     preparedArtifactId: null,
     currentWorkflowCommit: process.env.GITHUB_SHA || null,
     summaryFile: null,
+    dryRun: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -42,6 +44,8 @@ function parseArgs(argv) {
       options.currentWorkflowCommit = next();
     } else if (arg === '--summary-file') {
       options.summaryFile = resolve(next());
+    } else if (arg === '--dry-run') {
+      options.dryRun = true;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -60,6 +64,14 @@ function parseArgs(argv) {
   }
 
   return options;
+}
+
+function issueCommentsPath(repository, issueNumber) {
+  return `/repos/${repository}/issues/${issueNumber}/comments?per_page=100`;
+}
+
+function parseSourceIssueNumber(packetReport) {
+  return packetReport?.affected?.sourceIssueNumber ?? null;
 }
 
 function githubGetJson(path, token) {
@@ -107,10 +119,71 @@ async function main() {
     `/repos/${manifest.approval.repository}/issues/comments/${options.commentId}`,
     token,
   );
-  const issueComments = await githubGetJson(
-    `/repos/${manifest.approval.repository}/issues/${manifest.publication.evidenceIssueNumber}/comments?per_page=100`,
+  const approvalIssueComments = await githubGetJson(
+    issueCommentsPath(manifest.approval.repository, manifest.approval.issueNumber),
     token,
   );
+  const issueComments = await githubGetJson(
+    issueCommentsPath(manifest.approval.repository, manifest.publication.evidenceIssueNumber),
+    token,
+  );
+  const initialFreshnessReport = buildApprovalPacketFreshnessReport({
+    approvalComment,
+    manifest,
+    preparedRunId: options.preparedRunId,
+    preparedArtifactId: options.preparedArtifactId,
+    approvalIssueComments,
+    publicationIssueComments: issueComments,
+  });
+  const sourceIssueNumber = parseSourceIssueNumber(initialFreshnessReport);
+  const sourceIssueComments = sourceIssueNumber
+    ? await githubGetJson(issueCommentsPath(manifest.approval.repository, sourceIssueNumber), token)
+    : [];
+  const freshnessReport = buildApprovalPacketFreshnessReport({
+    approvalComment,
+    manifest,
+    preparedRunId: options.preparedRunId,
+    preparedArtifactId: options.preparedArtifactId,
+    approvalIssueComments,
+    sourceIssueComments,
+    publicationIssueComments: issueComments,
+  });
+
+  if (options.dryRun) {
+    writeJsonFile(options.summaryFile, {
+      status: freshnessReport.stale ? 'stale' : 'fresh',
+      mode: 'dry-run',
+      manifestPath: manifest.manifestPath,
+      package: manifest.package,
+      source: manifest.source,
+      release: manifest.release,
+      currentWorkflowCommit: options.currentWorkflowCommit,
+      preparedRunId: options.preparedRunId,
+      preparedArtifactId: options.preparedArtifactId,
+      approvalComment: {
+        id: String(approvalComment.id),
+        author: approvalComment.user?.login ?? 'unknown',
+        url: approvalComment.html_url ?? null,
+        createdAt: approvalComment.created_at ?? null,
+      },
+      freshness: freshnessReport,
+    });
+
+    const affected = freshnessReport.affected;
+    console.log(
+      [
+        `Approval packet freshness dry-run: ${freshnessReport.stale ? 'STALE' : 'FRESH'}`,
+        `Repository=${affected.repository}`,
+        `ApprovalIssue=${affected.approvalIssueNumber}`,
+        `SourceIssue=${affected.sourceIssueNumber ?? 'unknown'}`,
+        `PullRequest=${affected.pullRequestNumber ?? 'unknown'}`,
+        `PublicationIssue=${affected.publicationEvidenceIssueNumber}`,
+        `PacketComment=${affected.packetCommentId ?? 'missing'}`,
+        `StaleReasons=${freshnessReport.staleReasons.map((reason) => reason.reason).join(',') || 'none'}`,
+      ].join('\n'),
+    );
+    return;
+  }
 
   const summary = verifyApprovalComment({
     approvalComment,
@@ -120,6 +193,8 @@ async function main() {
     preparedArtifactId: options.preparedArtifactId,
     currentWorkflowCommit: options.currentWorkflowCommit,
     issueComments,
+    approvalIssueComments,
+    sourceIssueComments,
   });
 
   writeJsonFile(options.summaryFile, {

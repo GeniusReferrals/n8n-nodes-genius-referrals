@@ -146,6 +146,8 @@ npm test
 ## Release readiness
 
 The detailed release checklist lives in [docs/release-readiness.md](docs/release-readiness.md).
+The Creator Portal demo workflow for `0.1.3` lives in
+[docs/creator-portal-demo-0.1.3.md](docs/creator-portal-demo-0.1.3.md).
 
 Current release notes:
 

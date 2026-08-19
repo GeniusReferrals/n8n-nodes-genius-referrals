@@ -7,7 +7,11 @@ const GeniusReferrals_operation_1 = require("./GeniusReferrals.operation");
 class GeniusReferrals {
     constructor() {
         this.description = {
+            displayName: 'Genius Referrals',
+            name: 'geniusReferrals',
+            group: ['transform'],
             version: 1,
+            description: 'Use the Genius Referrals API in n8n workflows.',
             icon: {
                 light: 'file:../../icons/genius-referrals.svg',
                 dark: 'file:../../icons/genius-referrals-dark.png',

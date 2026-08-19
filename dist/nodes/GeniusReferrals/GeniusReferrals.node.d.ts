@@ -11,7 +11,11 @@ type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
 };
 export declare class GeniusReferrals implements INodeType {
     description: {
+        displayName: string;
+        name: string;
+        group: string[];
         version: number;
+        description: string;
         icon: {
             light: string;
             dark: string;

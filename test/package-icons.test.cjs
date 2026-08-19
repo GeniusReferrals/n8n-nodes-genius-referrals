@@ -14,6 +14,11 @@ const EXPECTED_CREDENTIAL_ICON = {
   dark: 'file:../icons/genius-referrals-dark.png',
 };
 
+const EXPECTED_NODE_IDENTITY = {
+  name: 'geniusReferrals',
+  displayName: 'Genius Referrals',
+};
+
 function packageFilesFromDryRun() {
   const output = execFileSync('npm', ['pack', '--dry-run', '--json'], {
     encoding: 'utf8',
@@ -29,6 +34,8 @@ test('node and credential metadata use the Genius Referrals icon assets', () => 
   const { GeniusReferrals } = require('../dist/nodes/GeniusReferrals/GeniusReferrals.node.js');
   const { GeniusReferralsApi } = require('../dist/credentials/GeniusReferralsApi.credentials.js');
 
+  assert.equal(new GeniusReferrals().description.name, EXPECTED_NODE_IDENTITY.name);
+  assert.equal(new GeniusReferrals().description.displayName, EXPECTED_NODE_IDENTITY.displayName);
   assert.deepEqual(new GeniusReferrals().description.icon, EXPECTED_NODE_ICON);
   assert.deepEqual(new GeniusReferralsApi().icon, EXPECTED_CREDENTIAL_ICON);
 });

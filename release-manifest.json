@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "package": {
     "name": "n8n-nodes-genius-referrals",
-    "version": "0.1.3"
+    "version": "0.1.4"
   },
   "source": {
-    "commit": "2532f8954696064a6d28dcb844514cb7e6259724"
+    "commit": "6f35f8dcf3cccedce8284ee74bc400c82f5d919b"
   },
   "release": {
     "finalWorkflowCommit": "e7ed48c54820037f5b5e148afa161910d9401b84"
   },
   "artifact": {
-    "sha256": "4c1651d2b1f4579cc8768600147de77347905663de8ffa0f706debbae6ac4c77",
-    "sha512": "sha512-+2oubOmTDI/Ez7r7Bmhrq8QyTd08BM6+OZjBaVnoeqn87gRZdMet6/8bF7bmuWNnv9b/KEFL3exgrkip/2Kjsw=="
+    "sha256": "9423ea98d3562b76f3e637f4fba4d44da9a567ed2d8bc698de455a70135e008a",
+    "sha512": "sha512-fIOPokcxVNyLL4z8sspnA2fJqvtKWCWQ5P8DpPSQlCgo69Pbwl1jdyL0F1uvqEcM7BaEfY3cgwWsigg8oznLsA=="
   },
   "approval": {
     "repository": "GeniusReferrals/n8n-nodes-genius-referrals",

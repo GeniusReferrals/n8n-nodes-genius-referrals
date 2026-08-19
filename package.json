@@ -13,7 +13,7 @@
     "icons"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-icons.cjs",
     "lint": "n8n-node lint",
     "release:prepare": "node scripts/verify-approved-release.cjs --manifest release-manifest.json",
     "release:scan-community": "node scripts/verify-community-scan.cjs --manifest release-manifest.json",

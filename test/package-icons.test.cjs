@@ -21,6 +21,17 @@ const EXPECTED_NODE_IDENTITY = {
   displayName: 'Genius Referrals',
 };
 
+const REQUIRED_PACKAGE_FILES = [
+  'dist/credentials/GeniusReferralsApi.credentials.d.ts',
+  'dist/credentials/GeniusReferralsApi.credentials.js',
+  'dist/icons/genius-referrals-dark.png',
+  'dist/icons/genius-referrals.svg',
+  'dist/index.d.ts',
+  'dist/index.js',
+  'dist/nodes/GeniusReferrals/GeniusReferrals.node.d.ts',
+  'dist/nodes/GeniusReferrals/GeniusReferrals.node.js',
+];
+
 function packageFilesFromDryRun() {
   const output = execFileSync('npm', ['pack', '--dry-run', '--json'], {
     encoding: 'utf8',
@@ -41,10 +52,15 @@ function iconPathFromDescriptor(compiledFilePath, iconPath) {
 test('node and credential metadata use the Genius Referrals icon assets', () => {
   const { GeniusReferrals } = require('../dist/nodes/GeniusReferrals/GeniusReferrals.node.js');
   const { GeniusReferralsApi } = require('../dist/credentials/GeniusReferralsApi.credentials.js');
+  const description = new GeniusReferrals().description;
 
-  assert.equal(new GeniusReferrals().description.name, EXPECTED_NODE_IDENTITY.name);
-  assert.equal(new GeniusReferrals().description.displayName, EXPECTED_NODE_IDENTITY.displayName);
-  assert.deepEqual(new GeniusReferrals().description.icon, EXPECTED_NODE_ICON);
+  assert.equal(description.name, EXPECTED_NODE_IDENTITY.name);
+  assert.equal(description.displayName, EXPECTED_NODE_IDENTITY.displayName);
+  assert.deepEqual(description.group, ['transform']);
+  assert.equal(typeof description.description, 'string');
+  assert.equal(description.description.length > 0, true);
+  assert.equal(description.usableAsTool, true);
+  assert.deepEqual(description.icon, EXPECTED_NODE_ICON);
   assert.deepEqual(new GeniusReferralsApi().icon, EXPECTED_CREDENTIAL_ICON);
 });
 
@@ -61,8 +77,12 @@ test('compiled node and credential icon paths resolve to packaged dist icons', (
   }
 });
 
-test('npm package includes required Genius Referrals icons and excludes removed dark SVG', () => {
+test('npm package includes compiled node, credential, declarations, and referenced icons', () => {
   const packageFiles = packageFilesFromDryRun();
+
+  for (const requiredFile of REQUIRED_PACKAGE_FILES) {
+    assert.equal(packageFiles.has(requiredFile), true, `${requiredFile} is packaged`);
+  }
 
   assert.equal(packageFiles.has('icons/genius-referrals.svg'), true);
   assert.equal(packageFiles.has('icons/genius-referrals-dark.png'), true);

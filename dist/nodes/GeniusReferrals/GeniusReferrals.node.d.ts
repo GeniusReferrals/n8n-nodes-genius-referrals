@@ -1,5 +1,4 @@
-import { NodeConnectionTypes } from 'n8n-workflow';
-import type { ILoadOptionsFunctions, INode, INodeExecutionData, INodeProperties, INodeType, IExecuteFunctions } from 'n8n-workflow';
+import type { ILoadOptionsFunctions, INode, INodeExecutionData, INodeType, INodeTypeDescription, IExecuteFunctions } from 'n8n-workflow';
 type GeniusReferralsExecuteContext = IExecuteFunctions & {
     continueOnFail(): boolean;
     getInputData(): INodeExecutionData[];
@@ -10,29 +9,7 @@ type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
     getCurrentNodeParameter(name: string): unknown;
 };
 export declare class GeniusReferrals implements INodeType {
-    description: {
-        displayName: string;
-        name: string;
-        group: string[];
-        version: number;
-        description: string;
-        icon: {
-            light: string;
-            dark: string;
-        };
-        subtitle: string;
-        defaults: {
-            name: string;
-        };
-        inputs: NodeConnectionTypes[];
-        outputs: NodeConnectionTypes[];
-        credentials: {
-            name: string;
-            required: boolean;
-        }[];
-        properties: INodeProperties[];
-        usableAsTool: boolean;
-    };
+    description: INodeTypeDescription;
     methods: {
         loadOptions: {
             getAccounts(this: GeniusReferralsLoadOptionsFunctions): Promise<{

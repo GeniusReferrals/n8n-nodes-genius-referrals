@@ -34,7 +34,11 @@ type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
 
 export class GeniusReferrals implements INodeType {
   description = {
+    displayName: 'Genius Referrals',
+    name: 'geniusReferrals',
+    group: ['transform'],
     version: 1,
+    description: 'Use the Genius Referrals API in n8n workflows.',
     icon: {
       light: 'file:../../icons/genius-referrals.svg',
       dark: 'file:../../icons/genius-referrals-dark.png',

@@ -117,8 +117,34 @@ declare module 'n8n-workflow' {
     Main = 'main',
   }
 
+  export type NodeGroupType = 'input' | 'output' | 'organization' | 'schedule' | 'transform' | 'trigger';
+
+  export interface INodeTypeDescription {
+    displayName: string;
+    name: string;
+    icon?: string | { light: string; dark: string };
+    group: NodeGroupType[];
+    version: number | number[];
+    description: string;
+    subtitle?: string;
+    defaults: {
+      name: string;
+      [key: string]: unknown;
+    };
+    inputs: Array<NodeConnectionTypes | string>;
+    outputs: Array<NodeConnectionTypes | string>;
+    credentials?: Array<{
+      name: string;
+      required?: boolean;
+      [key: string]: unknown;
+    }>;
+    properties: INodeProperties[];
+    usableAsTool?: true | Record<string, unknown>;
+    [key: string]: unknown;
+  }
+
   export interface INodeType {
-    description: Record<string, unknown>;
+    description: INodeTypeDescription;
   }
 
   export interface IRequestHelperFunctions {

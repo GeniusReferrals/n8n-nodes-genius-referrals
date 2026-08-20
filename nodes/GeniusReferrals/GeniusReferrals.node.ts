@@ -9,6 +9,7 @@ import type {
   INodeExecutionData,
   INodeProperties,
   INodeType,
+  INodeTypeDescription,
   IExecuteFunctions,
 } from 'n8n-workflow';
 import { getGeniusReferralsApiCredentials, grApiRequestWithAuthentication } from '../../lib/client/GeniusReferralsApiClient';
@@ -33,7 +34,7 @@ type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
 };
 
 export class GeniusReferrals implements INodeType {
-  description = {
+  description: INodeTypeDescription = {
     displayName: 'Genius Referrals',
     name: 'geniusReferrals',
     group: ['transform'],

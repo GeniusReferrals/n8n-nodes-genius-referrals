@@ -48,6 +48,19 @@ tarball SHA-256, tarball SHA-512, npm pack integrity, and dry-run result. The
 tarball and `release-preparation.json` are uploaded as the protected GitHub
 Actions artifact that publication must reuse.
 
+Before asking Alain for production approval, Aegis must preflight the manifest
+freshness contract against the release branch or `main` revision that will run
+the publication workflow:
+
+```bash
+git log -n 1 --format=%H -- .github/workflows/publish-n8n-node.yml scripts
+```
+
+That value must equal `release.finalWorkflowCommit` in `release-manifest.json`.
+If it does not, refresh the manifest and rerun preparation before requesting
+approval. Do not ask for approval, dispatch publish, or treat approval as
+actionable while the manifest points at stale release automation.
+
 ## Production Approval
 
 Real publication requires a GitHub issue comment authored by `alainhl` on the
@@ -125,9 +138,11 @@ Before artifact download or registry checks, the publication gate computes the
 release automation commit from the checked-out workflow and release scripts and
 requires it to match both `release.finalWorkflowCommit` in the manifest and
 `FinalReleaseCommit` in Alain's structured approval packet. Manifest-only
-follow-up commits may update the manifest to point at the final release
-automation commit; the workflow and release scripts themselves must not change
-after that approved commit without a new manifest and approval packet.
+follow-up commits may update the manifest to point at the current release
+automation commit, but they must not edit `.github/workflows/publish-n8n-node.yml`
+or `scripts/` in the same change. The workflow and release scripts themselves
+must not change after the approved commit without a new manifest, preparation
+artifact, and approval packet.
 
 The real publish step runs:
 

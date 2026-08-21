@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
@@ -132,6 +133,16 @@ test('workflow scopes issue write permission to publish job', () => {
 
   const prepareJob = workflow.slice(workflow.indexOf('prepare-release:'), workflow.indexOf('publish-release:'));
   assert.equal(prepareJob.includes('issues: write'), false);
+});
+
+test('release manifest final workflow commit matches current release automation', () => {
+  const releaseWorkflowCommit = execFileSync(
+    'git',
+    ['log', '-n', '1', '--format=%H', '--', '.github/workflows/publish-n8n-node.yml', 'scripts'],
+    { encoding: 'utf8' },
+  ).trim();
+
+  assert.equal(manifest.release.finalWorkflowCommit, releaseWorkflowCommit);
 });
 
 test('approval gate requires actual alainhl GitHub author and structured fields', () => {

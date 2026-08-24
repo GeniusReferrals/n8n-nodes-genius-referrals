@@ -5,14 +5,14 @@
     "version": "0.1.5"
   },
   "source": {
-    "commit": "5c81b155e8049ac016be500ccb804e63704d6206"
+    "commit": "791384661fbb4333fea301d9fd347da6da32301d"
   },
   "release": {
     "finalWorkflowCommit": "5244e8a92bf44fe97cbf06d93f04d02edc78e7b7"
   },
   "artifact": {
-    "sha256": "125fd1bfe82f0511756c50d317d5f1826c8a47e5d95da8005af9901f0bb14631",
-    "sha512": "sha512-u10mKsSXCW63buvdmb3UB3bQfQNfL8yi4BqtZBwEivagUc5O27yVGrg2Ggw3KDLDU8J7OPv7ECyOc0dcXPndUw=="
+    "sha256": "e70ac4d282732c1ea861d5f0f98774dc235c51726f797d3079f7289be0d45ae5",
+    "sha512": "sha512-U7/oXDg5yn/L+dbaACJDRokdBYSU2a4KmPo67Kl22M6BdMI+Xs2UAfAvKl9uhUY7Su4W0u33aPTZ56E2L7lrVw=="
   },
   "approval": {
     "repository": "GeniusReferrals/n8n-nodes-genius-referrals",

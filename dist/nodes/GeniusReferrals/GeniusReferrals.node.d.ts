@@ -2,7 +2,7 @@ import type { ILoadOptionsFunctions, INode, INodeExecutionData, INodeType, INode
 type GeniusReferralsExecuteContext = IExecuteFunctions & {
     continueOnFail(): boolean;
     getInputData(): INodeExecutionData[];
-    getNode(): INode;
+    getNode?: () => INode;
     getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
 };
 type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {

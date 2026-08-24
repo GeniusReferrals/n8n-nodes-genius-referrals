@@ -171,7 +171,7 @@ declare module 'n8n-workflow' {
   export interface IExecuteFunctions extends ICredentialAccessorFunctions {
     continueOnFail(): boolean;
     getInputData(): INodeExecutionData[];
-    getNode(): INode;
+    getNode?(): INode;
     getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
   }
 

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "package": {
     "name": "n8n-nodes-genius-referrals",
-    "version": "0.1.4"
+    "version": "0.1.5"
   },
   "source": {
     "commit": "5c81b155e8049ac016be500ccb804e63704d6206"

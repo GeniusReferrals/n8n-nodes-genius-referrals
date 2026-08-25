@@ -21,6 +21,8 @@ const {
   scanOutputPassed,
 } = require('../scripts/verify-community-scan.cjs');
 const {
+  commitExists,
+  ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,
   parseNpmViewDist,
 } = require('../scripts/verify-approved-release.cjs');
@@ -450,6 +452,40 @@ test('release preparation enforces real n8n lint and refuses npm tokens', () => 
   assert.equal(verifier.includes("summary.commands.push('npm run lint: PASS')"), true);
   assert.throws(() => assertNoNpmTokenEnv({ NPM_TOKEN: 'secret' }), /must not be present/);
   assert.doesNotThrow(() => assertNoNpmTokenEnv({}));
+});
+
+test('release preparation can recover manifest source commit from a shallow checkout', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-shallow-source-'));
+  const sourceDir = join(dir, 'source');
+  const remoteDir = join(dir, 'remote.git');
+  const shallowDir = join(dir, 'shallow');
+
+  try {
+    execFileSync('git', ['init', sourceDir], { stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: sourceDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: sourceDir });
+    writeFileSync(join(sourceDir, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+    execFileSync('git', ['add', 'package.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'initial package source'], { cwd: sourceDir, stdio: 'ignore' });
+    const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceDir, encoding: 'utf8' }).trim();
+
+    writeFileSync(join(sourceDir, 'README.md'), 'release metadata commit\n');
+    execFileSync('git', ['add', 'README.md'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'release metadata'], { cwd: sourceDir, stdio: 'ignore' });
+
+    execFileSync('git', ['clone', '--bare', sourceDir, remoteDir], { stdio: 'ignore' });
+    execFileSync('git', ['clone', '--depth', '1', `file://${remoteDir}`, shallowDir], { stdio: 'ignore' });
+
+    assert.equal(commitExists(shallowDir, sourceCommit), false);
+
+    const result = ensureGitCommitAvailable(shallowDir, sourceCommit);
+
+    assert.equal(result.available, true);
+    assert.equal(result.fetched, true);
+    assert.equal(commitExists(shallowDir, sourceCommit), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('community scan gate runs exact scanner command and fails closed on scanner output', () => {

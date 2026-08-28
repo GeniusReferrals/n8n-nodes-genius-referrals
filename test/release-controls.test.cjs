@@ -21,6 +21,7 @@ const {
   scanOutputPassed,
 } = require('../scripts/verify-community-scan.cjs');
 const {
+  checkoutReleaseSource,
   commitExists,
   ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,
@@ -223,6 +224,53 @@ test('release workflow freshness tolerates shallow manifest-only heads', () => {
         expectedCommit: workflowCommit,
       }),
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('release source checkout recovers commit tree after shallow local clone', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-source-tree-'));
+  const sourceDir = join(dir, 'source');
+  const remoteDir = join(dir, 'remote.git');
+  const shallowDir = join(dir, 'shallow');
+  const preparedSourceDir = join(dir, 'prepared-source');
+
+  try {
+    execFileSync('git', ['init', sourceDir], { stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: sourceDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: sourceDir });
+    writeFileSync(join(sourceDir, 'package.json'), '{"name":"test-package","version":"1.0.0"}\n');
+    execFileSync('git', ['add', 'package.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'package source'], { cwd: sourceDir, stdio: 'ignore' });
+    const packageCommit = gitOutput(['rev-parse', 'HEAD'], { cwd: sourceDir });
+
+    writeFileSync(join(sourceDir, 'release-manifest.json'), '{"schemaVersion":1}\n');
+    execFileSync('git', ['add', 'release-manifest.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'manifest only'], { cwd: sourceDir, stdio: 'ignore' });
+
+    execFileSync('git', ['clone', '--bare', sourceDir, remoteDir], { stdio: 'ignore' });
+    execFileSync('git', ['clone', '--depth', '1', `file://${remoteDir}`, shallowDir], { stdio: 'ignore' });
+    execFileSync('git', ['fetch', '--no-tags', 'origin', packageCommit], {
+      cwd: shallowDir,
+      stdio: 'ignore',
+    });
+
+    const tree = gitOutput(['rev-parse', `${packageCommit}^{tree}`], { cwd: shallowDir });
+    const treePath = join(shallowDir, '.git', 'objects', tree.slice(0, 2), tree.slice(2));
+    rmSync(treePath, { force: true });
+
+    assert.equal(commitExists(shallowDir, packageCommit), false);
+
+    const availability = checkoutReleaseSource({
+      repoRoot: shallowDir,
+      sourceDir: preparedSourceDir,
+      sourceCommit: packageCommit,
+    });
+
+    assert.equal(availability.rootAvailability.available, true);
+    assert.equal(gitOutput(['rev-parse', 'HEAD'], { cwd: preparedSourceDir }), packageCommit);
+    assert.equal(commitExists(preparedSourceDir, packageCommit), true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

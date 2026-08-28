@@ -96,8 +96,13 @@ function findRepoRoot() {
 
 function commitExists(cwd, commit) {
   const result = runRaw('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd, capture: true });
+  if (result.error || result.status !== 0) {
+    return false;
+  }
 
-  return !result.error && result.status === 0;
+  const treeResult = runRaw('git', ['cat-file', '-e', `${commit}^{tree}`], { cwd, capture: true });
+
+  return !treeResult.error && treeResult.status === 0;
 }
 
 function listGitRemotes(cwd) {
@@ -182,6 +187,19 @@ function ensureGitCommitAvailable(cwd, commit) {
     ? ` Fetch attempts: ${result.attempts.join(' | ')}`
     : ' No Git remotes are configured for source commit recovery.';
   throw new Error(`Release source commit ${commit} is not available in this checkout.${detail}`);
+}
+
+function checkoutReleaseSource({ repoRoot, sourceDir, sourceCommit }) {
+  const rootAvailability = ensureGitCommitAvailable(repoRoot, sourceCommit);
+
+  run('git', ['clone', '--no-hardlinks', '--quiet', repoRoot, sourceDir], { cwd: repoRoot });
+  const sourceAvailability = ensureGitCommitAvailable(sourceDir, sourceCommit);
+  run('git', ['checkout', '--detach', '--quiet', sourceCommit], { cwd: sourceDir });
+
+  return {
+    rootAvailability,
+    sourceAvailability,
+  };
 }
 
 function verifyPackageJson(sourceDir, manifest) {
@@ -303,13 +321,17 @@ function main() {
   const packDir = options.packDestination ?? join(workRoot, 'pack');
 
   try {
-    const commitAvailability = ensureGitCommitAvailable(repoRoot, manifest.source.commit);
-    if (commitAvailability.fetched) {
+    const checkoutAvailability = checkoutReleaseSource({
+      repoRoot,
+      sourceDir,
+      sourceCommit: manifest.source.commit,
+    });
+    if (checkoutAvailability.rootAvailability.fetched) {
       summary.commands.push('git fetch missing source commit: PASS');
     }
-
-    run('git', ['clone', '--no-hardlinks', '--quiet', repoRoot, sourceDir], { cwd: repoRoot });
-    run('git', ['checkout', '--detach', '--quiet', manifest.source.commit], { cwd: sourceDir });
+    if (checkoutAvailability.sourceAvailability.fetched) {
+      summary.commands.push('git fetch source commit into release workdir: PASS');
+    }
 
     const checkedOutCommit = runCapture('git', ['rev-parse', 'HEAD'], sourceDir);
     if (checkedOutCommit !== manifest.source.commit) {
@@ -431,6 +453,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  checkoutReleaseSource,
   commitExists,
   ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,

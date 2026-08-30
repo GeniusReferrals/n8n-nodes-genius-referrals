@@ -287,15 +287,19 @@ class GeniusReferrals {
     async execute() {
         const items = this.getInputData();
         const credentials = await (0, GeniusReferralsApiClient_1.getGeniusReferralsApiCredentials)(this);
-        const node = this.getNode();
+        const node = resolveExecutionNode(this);
         const responseItems = [];
         for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
             try {
                 const parameters = getNodeOperationParameters(this, itemIndex);
                 const request = (0, GeniusReferrals_operation_1.buildGeniusReferralsRequestDefinition)(parameters, node);
-                const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthentication)(this.helpers.httpRequestWithAuthentication.bind(this.helpers), {
+                const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthenticationAsNodeApiError)(this.helpers.httpRequestWithAuthentication.bind(this.helpers), {
                     ...request,
                     baseUrl: credentials.baseUrl,
+                }, {
+                    node,
+                    nodeApiErrorCtor: n8n_workflow_1.NodeApiError,
+                    nodeApiErrorOptions: { itemIndex },
                 });
                 responseItems.push(...toExecutionData(response, itemIndex));
             }
@@ -311,9 +315,7 @@ class GeniusReferrals {
                     });
                     continue;
                 }
-                throw new n8n_workflow_1.NodeApiError(node, {
-                    message: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
-                });
+                throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
             }
         }
         return [responseItems];
@@ -326,6 +328,25 @@ class GeniusReferrals {
     }
 }
 exports.GeniusReferrals = GeniusReferrals;
+const GENIUS_REFERRALS_EXECUTION_NODE = {
+    id: 'genius-referrals-execution',
+    name: 'Genius Referrals',
+    type: 'n8n-nodes-genius-referrals.geniusReferrals',
+    typeVersion: 1,
+    position: [0, 0],
+    parameters: {},
+};
+function resolveExecutionNode(context) {
+    return context.getNode?.() ?? GENIUS_REFERRALS_EXECUTION_NODE;
+}
+function toGeniusReferralsNodeApiError(node, error, options = {}) {
+    if (error instanceof n8n_workflow_1.NodeApiError) {
+        return error;
+    }
+    return new n8n_workflow_1.NodeApiError(node, {
+        message: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
+    }, options);
+}
 function getNodeOperationParameters(context, itemIndex) {
     return {
         accountSlug: getOptionalStringParameter(context, 'accountSlug', itemIndex),

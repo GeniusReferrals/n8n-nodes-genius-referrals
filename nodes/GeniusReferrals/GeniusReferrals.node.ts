@@ -11,8 +11,13 @@ import type {
   INodeType,
   INodeTypeDescription,
   IExecuteFunctions,
+  NodeApiErrorOptions,
 } from 'n8n-workflow';
-import { getGeniusReferralsApiCredentials, grApiRequestWithAuthentication } from '../../lib/client/GeniusReferralsApiClient';
+import {
+  getGeniusReferralsApiCredentials,
+  grApiRequestWithAuthentication,
+  grApiRequestWithAuthenticationAsNodeApiError,
+} from '../../lib/client/GeniusReferralsApiClient';
 import {
   buildGeniusReferralsRequestDefinition,
   createOperationProperties,
@@ -25,7 +30,7 @@ import {
 type GeniusReferralsExecuteContext = IExecuteFunctions & {
   continueOnFail(): boolean;
   getInputData(): INodeExecutionData[];
-  getNode(): INode;
+  getNode?: () => INode;
   getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
 };
 
@@ -318,18 +323,23 @@ export class GeniusReferrals implements INodeType {
   async execute(this: GeniusReferralsExecuteContext): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const credentials = await getGeniusReferralsApiCredentials(this);
-    const node = this.getNode();
+    const node = resolveExecutionNode(this);
     const responseItems: INodeExecutionData[] = [];
 
     for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
       try {
         const parameters = getNodeOperationParameters(this, itemIndex);
         const request = buildGeniusReferralsRequestDefinition(parameters, node);
-        const response = await grApiRequestWithAuthentication(
+        const response = await grApiRequestWithAuthenticationAsNodeApiError(
           this.helpers.httpRequestWithAuthentication.bind(this.helpers),
           {
             ...request,
             baseUrl: credentials.baseUrl,
+          },
+          {
+            node,
+            nodeApiErrorCtor: NodeApiError,
+            nodeApiErrorOptions: { itemIndex },
           },
         );
 
@@ -347,9 +357,7 @@ export class GeniusReferrals implements INodeType {
           continue;
         }
 
-        throw new NodeApiError(node, {
-          message: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
-        });
+        throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
       }
     }
 
@@ -370,6 +378,37 @@ export class GeniusReferrals implements INodeType {
   ): string | undefined {
     return getOptionalStringParameter(this, name, itemIndex);
   }
+}
+
+const GENIUS_REFERRALS_EXECUTION_NODE: INode = {
+  id: 'genius-referrals-execution',
+  name: 'Genius Referrals',
+  type: 'n8n-nodes-genius-referrals.geniusReferrals',
+  typeVersion: 1,
+  position: [0, 0],
+  parameters: {},
+};
+
+function resolveExecutionNode(context: GeniusReferralsExecuteContext): INode {
+  return context.getNode?.() ?? GENIUS_REFERRALS_EXECUTION_NODE;
+}
+
+function toGeniusReferralsNodeApiError(
+  node: INode,
+  error: unknown,
+  options: NodeApiErrorOptions = {},
+): NodeApiError {
+  if (error instanceof NodeApiError) {
+    return error;
+  }
+
+  return new NodeApiError(
+    node,
+    {
+      message: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
+    },
+    options,
+  );
 }
 
 function getNodeOperationParameters(

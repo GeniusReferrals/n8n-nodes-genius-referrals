@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 
@@ -21,6 +21,9 @@ const {
   scanOutputPassed,
 } = require('../scripts/verify-community-scan.cjs');
 const {
+  checkoutReleaseSource,
+  commitExists,
+  ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,
   parseNpmViewDist,
 } = require('../scripts/verify-approved-release.cjs');
@@ -95,6 +98,56 @@ function futureManifest(overrides = {}) {
   };
 }
 
+function gitOutput(args, options = {}) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    ...options,
+  }).trim();
+}
+
+function assertReleaseWorkflowCommitIsFresh({
+  cwd = process.cwd(),
+  expectedCommit = manifest.release.finalWorkflowCommit,
+} = {}) {
+  const releasePaths = ['.github/workflows/publish-n8n-node.yml', 'scripts'];
+  const releaseWorkflowCommit = gitOutput([
+    'log',
+    '-n',
+    '1',
+    '--format=%H',
+    '--',
+    ...releasePaths,
+  ], { cwd });
+
+  if (releaseWorkflowCommit === expectedCommit) {
+    return;
+  }
+
+  const isShallow = gitOutput(['rev-parse', '--is-shallow-repository'], { cwd }) === 'true';
+
+  if (!isShallow) {
+    assert.equal(expectedCommit, releaseWorkflowCommit);
+    return;
+  }
+
+  ensureGitCommitAvailable(cwd, expectedCommit);
+
+  try {
+    execFileSync(
+      'git',
+      ['diff', '--quiet', `${expectedCommit}..HEAD`, '--', ...releasePaths],
+      { cwd, stdio: 'ignore' },
+    );
+  } catch (error) {
+    if (error.status === 1) {
+      assert.equal(expectedCommit, releaseWorkflowCommit);
+      return;
+    }
+
+    throw error;
+  }
+}
+
 test('reusable workflow does not hard-code per-release identity', () => {
   const workflow = require('node:fs').readFileSync('.github/workflows/publish-n8n-node.yml', 'utf8');
 
@@ -136,13 +189,91 @@ test('workflow scopes issue write permission to publish job', () => {
 });
 
 test('release manifest final workflow commit matches current release automation', () => {
-  const releaseWorkflowCommit = execFileSync(
-    'git',
-    ['log', '-n', '1', '--format=%H', '--', '.github/workflows/publish-n8n-node.yml', 'scripts'],
-    { encoding: 'utf8' },
-  ).trim();
+  assertReleaseWorkflowCommitIsFresh();
+});
 
-  assert.equal(manifest.release.finalWorkflowCommit, releaseWorkflowCommit);
+test('release workflow freshness tolerates shallow manifest-only heads', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-shallow-workflow-'));
+  const sourceDir = join(dir, 'source');
+  const remoteDir = join(dir, 'remote.git');
+  const shallowDir = join(dir, 'shallow');
+
+  try {
+    execFileSync('git', ['init', sourceDir], { stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: sourceDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: sourceDir });
+    mkdirSync(join(sourceDir, '.github', 'workflows'), { recursive: true });
+    mkdirSync(join(sourceDir, 'scripts'), { recursive: true });
+    writeFileSync(join(sourceDir, '.github', 'workflows', 'publish-n8n-node.yml'), 'name: publish\n');
+    writeFileSync(join(sourceDir, 'scripts', 'verify-approved-release.cjs'), "'use strict';\n");
+    execFileSync('git', ['add', '.'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'release automation'], { cwd: sourceDir, stdio: 'ignore' });
+    const workflowCommit = gitOutput(['rev-parse', 'HEAD'], { cwd: sourceDir });
+
+    writeFileSync(join(sourceDir, 'release-manifest.json'), '{"schemaVersion":1}\n');
+    execFileSync('git', ['add', 'release-manifest.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'release manifest only'], { cwd: sourceDir, stdio: 'ignore' });
+
+    execFileSync('git', ['clone', '--bare', sourceDir, remoteDir], { stdio: 'ignore' });
+    execFileSync('git', ['clone', '--depth', '1', `file://${remoteDir}`, shallowDir], { stdio: 'ignore' });
+
+    assert.equal(gitOutput(['rev-parse', '--is-shallow-repository'], { cwd: shallowDir }), 'true');
+    assert.doesNotThrow(() =>
+      assertReleaseWorkflowCommitIsFresh({
+        cwd: shallowDir,
+        expectedCommit: workflowCommit,
+      }),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('release source checkout recovers commit tree after shallow local clone', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-source-tree-'));
+  const sourceDir = join(dir, 'source');
+  const remoteDir = join(dir, 'remote.git');
+  const shallowDir = join(dir, 'shallow');
+  const preparedSourceDir = join(dir, 'prepared-source');
+
+  try {
+    execFileSync('git', ['init', sourceDir], { stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: sourceDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: sourceDir });
+    writeFileSync(join(sourceDir, 'package.json'), '{"name":"test-package","version":"1.0.0"}\n');
+    execFileSync('git', ['add', 'package.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'package source'], { cwd: sourceDir, stdio: 'ignore' });
+    const packageCommit = gitOutput(['rev-parse', 'HEAD'], { cwd: sourceDir });
+
+    writeFileSync(join(sourceDir, 'release-manifest.json'), '{"schemaVersion":1}\n');
+    execFileSync('git', ['add', 'release-manifest.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'manifest only'], { cwd: sourceDir, stdio: 'ignore' });
+
+    execFileSync('git', ['clone', '--bare', sourceDir, remoteDir], { stdio: 'ignore' });
+    execFileSync('git', ['clone', '--depth', '1', `file://${remoteDir}`, shallowDir], { stdio: 'ignore' });
+    execFileSync('git', ['fetch', '--no-tags', 'origin', packageCommit], {
+      cwd: shallowDir,
+      stdio: 'ignore',
+    });
+
+    const tree = gitOutput(['rev-parse', `${packageCommit}^{tree}`], { cwd: shallowDir });
+    const treePath = join(shallowDir, '.git', 'objects', tree.slice(0, 2), tree.slice(2));
+    rmSync(treePath, { force: true });
+
+    assert.equal(commitExists(shallowDir, packageCommit), false);
+
+    const availability = checkoutReleaseSource({
+      repoRoot: shallowDir,
+      sourceDir: preparedSourceDir,
+      sourceCommit: packageCommit,
+    });
+
+    assert.equal(availability.rootAvailability.available, true);
+    assert.equal(gitOutput(['rev-parse', 'HEAD'], { cwd: preparedSourceDir }), packageCommit);
+    assert.equal(commitExists(preparedSourceDir, packageCommit), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('approval gate requires actual alainhl GitHub author and structured fields', () => {
@@ -450,6 +581,40 @@ test('release preparation enforces real n8n lint and refuses npm tokens', () => 
   assert.equal(verifier.includes("summary.commands.push('npm run lint: PASS')"), true);
   assert.throws(() => assertNoNpmTokenEnv({ NPM_TOKEN: 'secret' }), /must not be present/);
   assert.doesNotThrow(() => assertNoNpmTokenEnv({}));
+});
+
+test('release preparation can recover manifest source commit from a shallow checkout', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-shallow-source-'));
+  const sourceDir = join(dir, 'source');
+  const remoteDir = join(dir, 'remote.git');
+  const shallowDir = join(dir, 'shallow');
+
+  try {
+    execFileSync('git', ['init', sourceDir], { stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: sourceDir });
+    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: sourceDir });
+    writeFileSync(join(sourceDir, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+    execFileSync('git', ['add', 'package.json'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'initial package source'], { cwd: sourceDir, stdio: 'ignore' });
+    const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceDir, encoding: 'utf8' }).trim();
+
+    writeFileSync(join(sourceDir, 'README.md'), 'release metadata commit\n');
+    execFileSync('git', ['add', 'README.md'], { cwd: sourceDir });
+    execFileSync('git', ['commit', '-m', 'release metadata'], { cwd: sourceDir, stdio: 'ignore' });
+
+    execFileSync('git', ['clone', '--bare', sourceDir, remoteDir], { stdio: 'ignore' });
+    execFileSync('git', ['clone', '--depth', '1', `file://${remoteDir}`, shallowDir], { stdio: 'ignore' });
+
+    assert.equal(commitExists(shallowDir, sourceCommit), false);
+
+    const result = ensureGitCommitAvailable(shallowDir, sourceCommit);
+
+    assert.equal(result.available, true);
+    assert.equal(result.fetched, true);
+    assert.equal(commitExists(shallowDir, sourceCommit), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('community scan gate runs exact scanner command and fails closed on scanner output', () => {

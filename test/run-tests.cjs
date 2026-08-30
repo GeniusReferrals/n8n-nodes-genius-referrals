@@ -42,18 +42,36 @@ if (testFiles.length === 0) {
   process.exit(1);
 }
 
-console.log(`Running ${testFiles.length} test file(s):`);
+console.log(`Running ${testFiles.length} test file(s) sequentially:`);
 for (const file of testFiles) {
   console.log(`- ${relative(process.cwd(), file)}`);
 }
 
-const result = spawnSync(process.execPath, ['--test', ...testFiles], {
-  stdio: 'inherit',
-});
+const failedFiles = [];
 
-if (result.error) {
-  console.error(result.error);
+for (const file of testFiles) {
+  const relativeFile = relative(process.cwd(), file);
+
+  console.log(`\n> ${relativeFile}`);
+
+  const result = spawnSync(process.execPath, ['--test', file], {
+    stdio: 'inherit',
+  });
+
+  if (result.error) {
+    console.error(result.error);
+    failedFiles.push(relativeFile);
+    continue;
+  }
+
+  if (result.status !== 0) {
+    failedFiles.push(relativeFile);
+  }
+}
+
+if (failedFiles.length > 0) {
+  console.error(`Failed test file(s): ${failedFiles.join(', ')}`);
   process.exit(1);
 }
 
-process.exit(result.status === null ? 1 : result.status);
+process.exit(0);

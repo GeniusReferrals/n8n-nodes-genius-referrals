@@ -94,6 +94,114 @@ function findRepoRoot() {
   return runCapture('git', ['rev-parse', '--show-toplevel'], process.cwd());
 }
 
+function commitExists(cwd, commit) {
+  const result = runRaw('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd, capture: true });
+  if (result.error || result.status !== 0) {
+    return false;
+  }
+
+  const treeResult = runRaw('git', ['cat-file', '-e', `${commit}^{tree}`], { cwd, capture: true });
+
+  return !treeResult.error && treeResult.status === 0;
+}
+
+function listGitRemotes(cwd) {
+  const result = runRaw('git', ['remote'], { cwd, capture: true });
+
+  if (result.error || result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((remote) => remote.trim())
+    .filter(Boolean);
+}
+
+function isShallowRepository(cwd) {
+  const result = runRaw('git', ['rev-parse', '--is-shallow-repository'], { cwd, capture: true });
+
+  return !result.error && result.status === 0 && result.stdout.trim() === 'true';
+}
+
+function summarizeFetchAttempt(args, result) {
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim().replace(/\s+/g, ' ');
+  const suffix = output ? `: ${output.slice(0, 240)}` : '';
+
+  return `git ${args.join(' ')} -> ${result.status ?? 'error'}${result.error ? `: ${result.error.message}` : suffix}`;
+}
+
+function fetchMissingCommit(cwd, commit) {
+  const remotes = listGitRemotes(cwd);
+  const attempts = [];
+
+  for (const remote of remotes) {
+    const fetchAttempts = [];
+
+    if (isShallowRepository(cwd)) {
+      fetchAttempts.push(['fetch', '--no-tags', '--unshallow', remote]);
+      fetchAttempts.push(['fetch', '--no-tags', '--deepen=1000', remote]);
+    }
+
+    fetchAttempts.push(['fetch', '--no-tags', remote, commit]);
+    fetchAttempts.push(['fetch', '--no-tags', remote, `+refs/heads/*:refs/remotes/${remote}/*`]);
+
+    for (const args of fetchAttempts) {
+      const result = runRaw('git', args, { cwd, capture: true });
+      attempts.push(summarizeFetchAttempt(args, result));
+
+      if (commitExists(cwd, commit)) {
+        return {
+          fetched: true,
+          attempts,
+        };
+      }
+    }
+  }
+
+  return {
+    fetched: false,
+    attempts,
+  };
+}
+
+function ensureGitCommitAvailable(cwd, commit) {
+  if (commitExists(cwd, commit)) {
+    return {
+      available: true,
+      fetched: false,
+      attempts: [],
+    };
+  }
+
+  const result = fetchMissingCommit(cwd, commit);
+  if (commitExists(cwd, commit)) {
+    return {
+      available: true,
+      fetched: result.fetched,
+      attempts: result.attempts,
+    };
+  }
+
+  const detail = result.attempts.length > 0
+    ? ` Fetch attempts: ${result.attempts.join(' | ')}`
+    : ' No Git remotes are configured for source commit recovery.';
+  throw new Error(`Release source commit ${commit} is not available in this checkout.${detail}`);
+}
+
+function checkoutReleaseSource({ repoRoot, sourceDir, sourceCommit }) {
+  const rootAvailability = ensureGitCommitAvailable(repoRoot, sourceCommit);
+
+  run('git', ['clone', '--no-hardlinks', '--quiet', repoRoot, sourceDir], { cwd: repoRoot });
+  const sourceAvailability = ensureGitCommitAvailable(sourceDir, sourceCommit);
+  run('git', ['checkout', '--detach', '--quiet', sourceCommit], { cwd: sourceDir });
+
+  return {
+    rootAvailability,
+    sourceAvailability,
+  };
+}
+
 function verifyPackageJson(sourceDir, manifest) {
   const packageJson = JSON.parse(readFileSync(join(sourceDir, 'package.json'), 'utf8'));
 
@@ -213,9 +321,17 @@ function main() {
   const packDir = options.packDestination ?? join(workRoot, 'pack');
 
   try {
-    run('git', ['cat-file', '-e', `${manifest.source.commit}^{commit}`], { cwd: repoRoot });
-    run('git', ['clone', '--no-hardlinks', '--quiet', repoRoot, sourceDir], { cwd: repoRoot });
-    run('git', ['checkout', '--detach', '--quiet', manifest.source.commit], { cwd: sourceDir });
+    const checkoutAvailability = checkoutReleaseSource({
+      repoRoot,
+      sourceDir,
+      sourceCommit: manifest.source.commit,
+    });
+    if (checkoutAvailability.rootAvailability.fetched) {
+      summary.commands.push('git fetch missing source commit: PASS');
+    }
+    if (checkoutAvailability.sourceAvailability.fetched) {
+      summary.commands.push('git fetch source commit into release workdir: PASS');
+    }
 
     const checkedOutCommit = runCapture('git', ['rev-parse', 'HEAD'], sourceDir);
     if (checkedOutCommit !== manifest.source.commit) {
@@ -337,6 +453,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  checkoutReleaseSource,
+  commitExists,
+  ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,
   parseNpmViewDist,
   verifyAlreadyPublishedRegistryState,

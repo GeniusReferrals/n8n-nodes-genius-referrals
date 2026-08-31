@@ -78,7 +78,7 @@ Version=<manifest version>
 Commit=<manifest source commit>
 FinalReleaseCommit=<manifest release finalWorkflowCommit>
 PackageSHA256=<manifest tarball sha256>
-AuthorizedActions=npm publication
+AuthorizedActions=npm publish and n8n Creator Portal submission
 PreparedRunID=<approved preparation workflow run id>
 PreparedArtifactID=<approved prepared artifact id>
 ```

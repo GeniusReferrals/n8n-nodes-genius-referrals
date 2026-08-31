@@ -16,11 +16,11 @@
   },
   "approval": {
     "repository": "GeniusReferrals/n8n-nodes-genius-referrals",
-    "issueNumber": 1,
+    "issueNumber": 17,
     "requiredAuthor": "alainhl",
     "requiredMarker": "[ProductionApproval]",
     "requiredDecision": "APPROVED",
-    "requiredAuthorizedAction": "npm publication"
+    "requiredAuthorizedAction": "npm publish and n8n Creator Portal submission"
   },
   "publication": {
     "evidenceIssueNumber": 23,

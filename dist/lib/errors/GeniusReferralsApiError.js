@@ -85,12 +85,33 @@ function toGeniusReferralsNodeApiErrorResponse(error, requestOptions) {
 }
 function createGeniusReferralsNodeApiError(nodeApiErrorCtor, node, error, requestOptions, options = {}) {
     const errorResponse = toGeniusReferralsNodeApiErrorResponse(error, requestOptions);
-    return new nodeApiErrorCtor(node, errorResponse, {
+    const nodeApiErrorOptions = {
         ...options,
         description: options.description ?? pickString(errorResponse.description),
         httpCode: options.httpCode ?? pickString(errorResponse.httpCode),
         message: options.message ?? pickString(errorResponse.message),
-    });
+    };
+    try {
+        return new nodeApiErrorCtor(node, errorResponse, nodeApiErrorOptions);
+    }
+    catch (nodeApiError) {
+        if (!isGetNodeError(nodeApiError)) {
+            // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Preserve unexpected constructor failures.
+            throw nodeApiError;
+        }
+        const apiError = toGeniusReferralsApiError(error, requestOptions);
+        apiError.name = 'NodeApiError';
+        Object.assign(apiError, {
+            context: {
+                itemIndex: options.itemIndex,
+                runIndex: options.runIndex,
+            },
+            description: nodeApiErrorOptions.description,
+            httpCode: nodeApiErrorOptions.httpCode,
+            node,
+        });
+        return apiError;
+    }
 }
 function asDataObject(value) {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -100,6 +121,9 @@ function asDataObject(value) {
 }
 function pickString(value) {
     return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+function isGetNodeError(error) {
+    return error instanceof TypeError && /getNode/.test(error.message);
 }
 function summarizeDetails(value) {
     if (value === undefined || value === null) {

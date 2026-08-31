@@ -152,13 +152,35 @@ export function createGeniusReferralsNodeApiError<T extends Error = NodeApiError
   options: NodeApiErrorOptions = {},
 ): T {
   const errorResponse = toGeniusReferralsNodeApiErrorResponse(error, requestOptions);
-
-  return new nodeApiErrorCtor(node, errorResponse, {
+  const nodeApiErrorOptions = {
     ...options,
     description: options.description ?? pickString(errorResponse.description),
     httpCode: options.httpCode ?? pickString(errorResponse.httpCode),
     message: options.message ?? pickString(errorResponse.message),
-  });
+  };
+
+  try {
+    return new nodeApiErrorCtor(node, errorResponse, nodeApiErrorOptions);
+  } catch (nodeApiError) {
+    if (!isGetNodeError(nodeApiError)) {
+      // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Preserve unexpected constructor failures.
+      throw nodeApiError;
+    }
+
+    const apiError = toGeniusReferralsApiError(error, requestOptions);
+    apiError.name = 'NodeApiError';
+    Object.assign(apiError, {
+      context: {
+        itemIndex: options.itemIndex,
+        runIndex: options.runIndex,
+      },
+      description: nodeApiErrorOptions.description,
+      httpCode: nodeApiErrorOptions.httpCode,
+      node,
+    });
+
+    return apiError as unknown as T;
+  }
 }
 
 function asDataObject(value: unknown): IDataObject | undefined {
@@ -171,6 +193,10 @@ function asDataObject(value: unknown): IDataObject | undefined {
 
 function pickString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
+function isGetNodeError(error: unknown): boolean {
+  return error instanceof TypeError && /getNode/.test(error.message);
 }
 
 function summarizeDetails(value: unknown): string | undefined {

@@ -82,7 +82,7 @@ async function createGeniusReferralsApiClient(context, credentialType = exports.
     const credentials = await getGeniusReferralsApiCredentials(context, credentialType);
     return {
         credentials,
-        request: async (options) => grApiRequestWithAuthentication(context.helpers.httpRequestWithAuthentication.bind(context.helpers), {
+        request: async (options) => grApiRequestWithAuthentication((credentialType, requestOptions) => context.helpers.httpRequestWithAuthentication.call(context, credentialType, requestOptions), {
             ...options,
             baseUrl: options.baseUrl ?? credentials.baseUrl,
         }, credentialType),

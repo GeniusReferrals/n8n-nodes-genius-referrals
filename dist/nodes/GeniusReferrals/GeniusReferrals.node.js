@@ -293,12 +293,12 @@ class GeniusReferrals {
             try {
                 const parameters = getNodeOperationParameters(this, itemIndex);
                 const request = (0, GeniusReferrals_operation_1.buildGeniusReferralsRequestDefinition)(parameters, node);
-                const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthenticationAsNodeApiError)(this.helpers.httpRequestWithAuthentication.bind(this.helpers), {
+                const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthenticationAsNodeApiError)((credentialType, requestOptions) => this.helpers.httpRequestWithAuthentication.call(this, credentialType, requestOptions), {
                     ...request,
                     baseUrl: credentials.baseUrl,
                 }, {
                     node,
-                    nodeApiErrorCtor: n8n_workflow_1.NodeApiError,
+                    nodeApiErrorCtor: this.nodeApiErrorCtor ?? n8n_workflow_1.NodeApiError,
                     nodeApiErrorOptions: { itemIndex },
                 });
                 responseItems.push(...toExecutionData(response, itemIndex));
@@ -314,6 +314,10 @@ class GeniusReferrals {
                         },
                     });
                     continue;
+                }
+                if ((0, GeniusReferralsApiClient_1.isGeniusReferralsApiError)(error)) {
+                    // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Avoid re-entering getNode-sensitive NodeApiError construction.
+                    throw error;
                 }
                 throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
             }
@@ -377,7 +381,7 @@ function getOptionalStringParameter(context, name, itemIndex) {
 }
 async function loadCollection(context, endpoint) {
     const credentials = await (0, GeniusReferralsApiClient_1.getGeniusReferralsApiCredentials)(context);
-    return (0, GeniusReferralsApiClient_1.grApiRequestWithAuthentication)(context.helpers.httpRequestWithAuthentication.bind(context.helpers), {
+    return (0, GeniusReferralsApiClient_1.grApiRequestWithAuthentication)((credentialType, requestOptions) => context.helpers.httpRequestWithAuthentication.call(context, credentialType, requestOptions), {
         baseUrl: credentials.baseUrl,
         endpoint,
         method: 'GET',

@@ -17,6 +17,7 @@ import {
   getGeniusReferralsApiCredentials,
   grApiRequestWithAuthentication,
   grApiRequestWithAuthenticationAsNodeApiError,
+  isGeniusReferralsApiError,
 } from '../../lib/client/GeniusReferralsApiClient';
 import {
   buildGeniusReferralsRequestDefinition,
@@ -32,6 +33,7 @@ type GeniusReferralsExecuteContext = IExecuteFunctions & {
   getInputData(): INodeExecutionData[];
   getNode?: () => INode;
   getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
+  nodeApiErrorCtor?: typeof NodeApiError;
 };
 
 type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
@@ -331,14 +333,15 @@ export class GeniusReferrals implements INodeType {
         const parameters = getNodeOperationParameters(this, itemIndex);
         const request = buildGeniusReferralsRequestDefinition(parameters, node);
         const response = await grApiRequestWithAuthenticationAsNodeApiError(
-          this.helpers.httpRequestWithAuthentication.bind(this.helpers),
+          (credentialType, requestOptions) =>
+            this.helpers.httpRequestWithAuthentication.call(this, credentialType, requestOptions),
           {
             ...request,
             baseUrl: credentials.baseUrl,
           },
           {
             node,
-            nodeApiErrorCtor: NodeApiError,
+            nodeApiErrorCtor: this.nodeApiErrorCtor ?? NodeApiError,
             nodeApiErrorOptions: { itemIndex },
           },
         );
@@ -355,6 +358,11 @@ export class GeniusReferrals implements INodeType {
             },
           });
           continue;
+        }
+
+        if (isGeniusReferralsApiError(error)) {
+          // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Avoid re-entering getNode-sensitive NodeApiError construction.
+          throw error;
         }
 
         throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
@@ -390,7 +398,9 @@ const GENIUS_REFERRALS_EXECUTION_NODE: INode = {
 };
 
 function resolveExecutionNode(context: GeniusReferralsExecuteContext): INode {
-  return context.getNode?.() ?? GENIUS_REFERRALS_EXECUTION_NODE;
+  return typeof context.getNode === 'function'
+    ? context.getNode()
+    : GENIUS_REFERRALS_EXECUTION_NODE;
 }
 
 function toGeniusReferralsNodeApiError(
@@ -460,7 +470,8 @@ async function loadCollection(
   const credentials = await getGeniusReferralsApiCredentials(context);
 
   return grApiRequestWithAuthentication(
-    context.helpers.httpRequestWithAuthentication.bind(context.helpers),
+    (credentialType, requestOptions) =>
+      context.helpers.httpRequestWithAuthentication.call(context, credentialType, requestOptions),
     {
       baseUrl: credentials.baseUrl,
       endpoint,

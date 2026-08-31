@@ -40,6 +40,12 @@ class FakeNodeApiError extends Error {
   }
 }
 
+class GetNodeSensitiveNodeApiError extends Error {
+  constructor() {
+    throw new TypeError('this.getNode is not a function');
+  }
+}
+
 test('buildGeniusReferralsRequestOptions normalizes URL and JSON body headers', () => {
   const requestOptions = buildGeniusReferralsRequestOptions({
     baseUrl: 'https://api.geniusreferrals.com/',
@@ -301,6 +307,37 @@ test('createGeniusReferralsNodeApiError builds a NodeApiError-compatible object'
   assert.equal(error.httpCode, '422');
   assert.equal(error.node, TEST_NODE);
   assert.equal(error.errorResponse.response.data.code, 'validation_error');
+});
+
+test('createGeniusReferralsNodeApiError falls back when n8n NodeApiError requires getNode', () => {
+  const error = createGeniusReferralsNodeApiError(
+    GetNodeSensitiveNodeApiError,
+    TEST_NODE,
+    {
+      response: {
+        statusCode: 401,
+        body: {
+          code: 'invalid_api_token',
+          message: 'Invalid Genius Referrals API token',
+        },
+      },
+    },
+    {
+      method: 'GET',
+      url: 'https://api.geniusreferrals.com/test-authentication',
+    },
+    {
+      itemIndex: 0,
+    },
+  );
+
+  assert.equal(error instanceof GeniusReferralsApiError, true);
+  assert.equal(error.name, 'NodeApiError');
+  assert.equal(error.message, 'Invalid Genius Referrals API token');
+  assert.equal(error.httpCode, '401');
+  assert.equal(error.endpoint, 'https://api.geniusreferrals.com/test-authentication');
+  assert.equal(error.context.itemIndex, 0);
+  assert.doesNotMatch(error.message, /getNode/);
 });
 
 test('grApiRequestAsNodeApiError wraps low-level request failures in a NodeApiError-compatible object', async () => {

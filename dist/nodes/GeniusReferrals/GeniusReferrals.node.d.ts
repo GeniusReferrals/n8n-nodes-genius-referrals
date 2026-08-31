@@ -1,9 +1,11 @@
+import { NodeApiError } from 'n8n-workflow';
 import type { ILoadOptionsFunctions, INode, INodeExecutionData, INodeType, INodeTypeDescription, IExecuteFunctions } from 'n8n-workflow';
 type GeniusReferralsExecuteContext = IExecuteFunctions & {
     continueOnFail(): boolean;
     getInputData(): INodeExecutionData[];
     getNode?: () => INode;
     getNodeParameter(name: string, itemIndex: number, fallbackValue?: unknown): unknown;
+    nodeApiErrorCtor?: typeof NodeApiError;
 };
 type GeniusReferralsLoadOptionsFunctions = ILoadOptionsFunctions & {
     getCurrentNodeParameter(name: string): unknown;

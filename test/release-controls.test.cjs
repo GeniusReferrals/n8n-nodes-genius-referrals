@@ -45,7 +45,7 @@ function approvalComment(overrides = {}) {
       `Commit=${manifest.source.commit}`,
       `FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`,
       `PackageSHA256=${manifest.artifact.sha256}`,
-      'AuthorizedActions=npm publication',
+      `AuthorizedActions=${manifest.approval.requiredAuthorizedAction}`,
       'PreparedRunID=987654',
       'PreparedArtifactID=24680',
       overrides.extraBody ?? '',
@@ -57,7 +57,7 @@ function approvalComment(overrides = {}) {
 function approvalPacketComment({ id = 654321, createdAt = '2026-09-01T12:00:00Z', releaseManifest = manifest } = {}) {
   return {
     id,
-    html_url: `https://github.com/${releaseManifest.approval.repository}/issues/1#issuecomment-${id}`,
+    html_url: `https://github.com/${releaseManifest.approval.repository}/issues/${releaseManifest.approval.issueNumber}#issuecomment-${id}`,
     created_at: createdAt,
     body: [
       '[ProductionApprovalRequest] Agent=Aegis | SourceIssue=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/issues/200 | PullRequest=https://github.com/GeniusReferrals/n8n-nodes-genius-referrals/pull/201',
@@ -70,7 +70,7 @@ function approvalPacketComment({ id = 654321, createdAt = '2026-09-01T12:00:00Z'
       `Commit=${releaseManifest.source.commit}`,
       `FinalReleaseCommit=${releaseManifest.release.finalWorkflowCommit}`,
       `PackageSHA256=${releaseManifest.artifact.sha256}`,
-      'AuthorizedActions=npm publication',
+      `AuthorizedActions=${releaseManifest.approval.requiredAuthorizedAction}`,
       'PreparedRunID=987654',
       'PreparedArtifactID=24680',
       '```',
@@ -523,6 +523,37 @@ test('approval gate rejects stale approval packet after future evidence chain ch
       }),
     /Approval packet is stale: MBP_STAGE_EVIDENCE_CHANGED/,
   );
+});
+
+test('approval gate accepts tracker-scoped n8n publish approval packet', () => {
+  const summary = verifyApprovalComment({
+    approvalComment: approvalComment({
+      id: 5472749366,
+      issue_url: `https://api.github.com/repos/${manifest.approval.repository}/issues/17`,
+      body: [
+        '[ProductionApproval]',
+        'Decision=APPROVED',
+        `Package=${manifest.package.name}`,
+        `Version=${manifest.package.version}`,
+        `Commit=${manifest.source.commit}`,
+        `FinalReleaseCommit=${manifest.release.finalWorkflowCommit}`,
+        `PackageSHA256=${manifest.artifact.sha256}`,
+        'AuthorizedActions=npm publish and n8n Creator Portal submission',
+        'PreparedRunID=33348507611',
+        'PreparedArtifactID=9742811058',
+        'ApprovedBy=alainhl',
+      ].join('\n'),
+    }),
+    manifest,
+    expectedCommentId: '5472749366',
+    preparedRunId: '33348507611',
+    preparedArtifactId: '9742811058',
+    issueComments: [],
+    currentWorkflowCommit: manifest.release.finalWorkflowCommit,
+  });
+
+  assert.equal(summary.approvalAuthor, 'alainhl');
+  assert.equal(summary.fields.AuthorizedActions, manifest.approval.requiredAuthorizedAction);
 });
 
 test('publication evidence includes durable release identity and registry provenance fields', () => {

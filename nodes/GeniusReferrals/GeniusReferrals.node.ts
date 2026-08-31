@@ -390,7 +390,9 @@ const GENIUS_REFERRALS_EXECUTION_NODE: INode = {
 };
 
 function resolveExecutionNode(context: GeniusReferralsExecuteContext): INode {
-  return context.getNode?.() ?? GENIUS_REFERRALS_EXECUTION_NODE;
+  return typeof context.getNode === 'function'
+    ? context.getNode()
+    : GENIUS_REFERRALS_EXECUTION_NODE;
 }
 
 function toGeniusReferralsNodeApiError(

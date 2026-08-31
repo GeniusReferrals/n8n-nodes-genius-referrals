@@ -114,6 +114,35 @@ test('AI Agent tool execution works when the context omits getNode', async () =>
   assert.equal(calls[0].requestOptions.url, 'https://api.example.test/test-authentication');
 });
 
+test('AI Agent tool execution falls back when getNode is not callable', async () => {
+  const calls = [];
+  const context = createExecuteContext({
+    getNode: 'not-a-function',
+    async httpRequestWithAuthentication(credentialType, requestOptions) {
+      calls.push({ credentialType, requestOptions });
+
+      return {
+        data: {
+          agentTool: true,
+        },
+      };
+    },
+  });
+
+  const result = await new GeniusReferrals().execute.call(context);
+
+  assert.deepEqual(result[0][0], {
+    json: {
+      agentTool: true,
+    },
+    pairedItem: {
+      item: 0,
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].requestOptions.url, 'https://api.example.test/test-authentication');
+});
+
 test('AI Agent tool API failures are reported as NodeApiError instead of getNode TypeError', async () => {
   const context = createExecuteContext({
     getNode: undefined,

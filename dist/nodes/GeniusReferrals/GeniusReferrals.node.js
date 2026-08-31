@@ -337,7 +337,9 @@ const GENIUS_REFERRALS_EXECUTION_NODE = {
     parameters: {},
 };
 function resolveExecutionNode(context) {
-    return context.getNode?.() ?? GENIUS_REFERRALS_EXECUTION_NODE;
+    return typeof context.getNode === 'function'
+        ? context.getNode()
+        : GENIUS_REFERRALS_EXECUTION_NODE;
 }
 function toGeniusReferralsNodeApiError(node, error, options = {}) {
     if (error instanceof n8n_workflow_1.NodeApiError) {

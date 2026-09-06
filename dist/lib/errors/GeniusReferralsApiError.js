@@ -4,6 +4,7 @@ exports.GeniusReferralsApiError = void 0;
 exports.toGeniusReferralsApiError = toGeniusReferralsApiError;
 exports.toGeniusReferralsNodeApiErrorResponse = toGeniusReferralsNodeApiErrorResponse;
 exports.createGeniusReferralsNodeApiError = createGeniusReferralsNodeApiError;
+const n8n_workflow_1 = require("n8n-workflow");
 const DEFAULT_ERROR_MESSAGE = 'Genius Referrals API request failed.';
 class GeniusReferralsApiError extends Error {
     constructor(options) {
@@ -94,23 +95,8 @@ function createGeniusReferralsNodeApiError(nodeApiErrorCtor, node, error, reques
     try {
         return new nodeApiErrorCtor(node, errorResponse, nodeApiErrorOptions);
     }
-    catch (nodeApiError) {
-        if (!isGetNodeError(nodeApiError)) {
-            // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Preserve unexpected constructor failures.
-            throw nodeApiError;
-        }
-        const apiError = toGeniusReferralsApiError(error, requestOptions);
-        apiError.name = 'NodeApiError';
-        Object.assign(apiError, {
-            context: {
-                itemIndex: options.itemIndex,
-                runIndex: options.runIndex,
-            },
-            description: nodeApiErrorOptions.description,
-            httpCode: nodeApiErrorOptions.httpCode,
-            node,
-        });
-        return apiError;
+    catch {
+        return new n8n_workflow_1.NodeApiError(node, errorResponse, nodeApiErrorOptions);
     }
 }
 function asDataObject(value) {
@@ -121,9 +107,6 @@ function asDataObject(value) {
 }
 function pickString(value) {
     return typeof value === 'string' && value.trim() !== '' ? value : undefined;
-}
-function isGetNodeError(error) {
-    return error instanceof TypeError && /getNode/.test(error.message);
 }
 function summarizeDetails(value) {
     if (value === undefined || value === null) {

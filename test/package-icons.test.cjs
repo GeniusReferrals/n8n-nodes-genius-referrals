@@ -37,10 +37,16 @@ function packageFilesFromDryRun() {
     encoding: 'utf8',
   });
   const packages = JSON.parse(output);
+  const packageResult = Array.isArray(packages)
+    ? packages[0]
+    : packages['n8n-nodes-genius-referrals'];
 
-  assert.equal(packages.length, 1);
+  if (Array.isArray(packages)) {
+    assert.equal(packages.length, 1);
+  }
+  assert.notEqual(packageResult, undefined);
 
-  return new Set(packages[0].files.map((file) => file.path));
+  return new Set(packageResult.files.map((file) => file.path));
 }
 
 function iconPathFromDescriptor(compiledFilePath, iconPath) {

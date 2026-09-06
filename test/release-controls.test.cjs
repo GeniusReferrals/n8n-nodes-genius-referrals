@@ -25,6 +25,7 @@ const {
   commitExists,
   ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,
+  parsePackOutput,
   parseNpmViewDist,
 } = require('../scripts/verify-approved-release.cjs');
 
@@ -612,6 +613,34 @@ test('release preparation enforces real n8n lint and refuses npm tokens', () => 
   assert.equal(verifier.includes("summary.commands.push('npm run lint: PASS')"), true);
   assert.throws(() => assertNoNpmTokenEnv({ NPM_TOKEN: 'secret' }), /must not be present/);
   assert.doesNotThrow(() => assertNoNpmTokenEnv({}));
+});
+
+test('release preparation accepts npm pack array and keyed-object output', () => {
+  const entry = {
+    filename: 'n8n-nodes-genius-referrals-0.1.7.tgz',
+    files: [{ path: 'package.json' }],
+    integrity: 'sha512-candidate',
+    shasum: 'candidate-shasum',
+    unpackedSize: 100,
+    size: 80,
+  };
+  const expected = {
+    tarballPath: '/tmp/release-pack/n8n-nodes-genius-referrals-0.1.7.tgz',
+    files: entry.files,
+    integrity: entry.integrity,
+    shasum: entry.shasum,
+    unpackedSize: entry.unpackedSize,
+    packedSize: entry.size,
+  };
+
+  assert.deepEqual(parsePackOutput(JSON.stringify([entry]), '/tmp/release-pack'), expected);
+  assert.deepEqual(
+    parsePackOutput(
+      JSON.stringify({ 'n8n-nodes-genius-referrals': entry }),
+      '/tmp/release-pack',
+    ),
+    expected,
+  );
 });
 
 test('release preparation can recover manifest source commit from a shallow checkout', () => {

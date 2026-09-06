@@ -220,7 +220,17 @@ function verifyPackageJson(sourceDir, manifest) {
 
 function parsePackOutput(stdout, packDir) {
   const parsed = JSON.parse(stdout);
-  const entry = Array.isArray(parsed) ? parsed[0] : parsed;
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : parsed?.filename
+      ? [parsed]
+      : Object.values(parsed ?? {}).filter((value) => value?.filename);
+
+  if (entries.length !== 1) {
+    throw new Error(`npm pack reported ${entries.length} package entries; expected exactly one`);
+  }
+
+  const [entry] = entries;
 
   if (!entry?.filename) {
     throw new Error('npm pack did not report a tarball filename');
@@ -457,6 +467,7 @@ module.exports = {
   commitExists,
   ensureGitCommitAvailable,
   isAlreadyPublishedDryRunError,
+  parsePackOutput,
   parseNpmViewDist,
   verifyAlreadyPublishedRegistryState,
 };

@@ -285,44 +285,46 @@ class GeniusReferrals {
         };
     }
     async execute() {
-        const items = this.getInputData();
-        const credentials = await (0, GeniusReferralsApiClient_1.getGeniusReferralsApiCredentials)(this);
-        const node = resolveExecutionNode(this);
-        const responseItems = [];
-        for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
-            try {
-                const parameters = getNodeOperationParameters(this, itemIndex);
-                const request = (0, GeniusReferrals_operation_1.buildGeniusReferralsRequestDefinition)(parameters, node);
-                const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthenticationAsNodeApiError)((credentialType, requestOptions) => this.helpers.httpRequestWithAuthentication.call(this, credentialType, requestOptions), {
-                    ...request,
-                    baseUrl: credentials.baseUrl,
-                }, {
-                    node,
-                    nodeApiErrorCtor: this.nodeApiErrorCtor ?? n8n_workflow_1.NodeApiError,
-                    nodeApiErrorOptions: { itemIndex },
-                });
-                responseItems.push(...toExecutionData(response, itemIndex));
-            }
-            catch (error) {
-                if (this.continueOnFail()) {
-                    responseItems.push({
-                        json: {
-                            error: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
-                        },
-                        pairedItem: {
-                            item: itemIndex,
-                        },
+        let node = GENIUS_REFERRALS_EXECUTION_NODE;
+        try {
+            node = resolveExecutionNode(this);
+            const items = this.getInputData();
+            const credentials = await (0, GeniusReferralsApiClient_1.getGeniusReferralsApiCredentials)(this);
+            const responseItems = [];
+            for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+                try {
+                    const parameters = getNodeOperationParameters(this, itemIndex);
+                    const request = (0, GeniusReferrals_operation_1.buildGeniusReferralsRequestDefinition)(parameters, node);
+                    const response = await (0, GeniusReferralsApiClient_1.grApiRequestWithAuthenticationAsNodeApiError)((credentialType, requestOptions) => this.helpers.httpRequestWithAuthentication.call(this, credentialType, requestOptions), {
+                        ...request,
+                        baseUrl: credentials.baseUrl,
+                    }, {
+                        node,
+                        nodeApiErrorCtor: this.nodeApiErrorCtor ?? n8n_workflow_1.NodeApiError,
+                        nodeApiErrorOptions: { itemIndex },
                     });
-                    continue;
+                    responseItems.push(...toExecutionData(response, itemIndex));
                 }
-                if ((0, GeniusReferralsApiClient_1.isGeniusReferralsApiError)(error)) {
-                    // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Avoid re-entering getNode-sensitive NodeApiError construction.
-                    throw error;
+                catch (error) {
+                    if (this.continueOnFail()) {
+                        responseItems.push({
+                            json: {
+                                error: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
+                            },
+                            pairedItem: {
+                                item: itemIndex,
+                            },
+                        });
+                        continue;
+                    }
+                    throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
                 }
-                throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
             }
+            return [responseItems];
         }
-        return [responseItems];
+        catch (error) {
+            throw toGeniusReferralsNodeApiError(node, error);
+        }
     }
     getNodeOperationParameters(itemIndex) {
         return getNodeOperationParameters(this, itemIndex);

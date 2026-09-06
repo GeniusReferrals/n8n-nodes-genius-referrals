@@ -1,3 +1,4 @@
+import { NodeApiError } from 'n8n-workflow';
 import type {
   GenericValue,
   IDataObject,
@@ -5,7 +6,6 @@ import type {
   IHttpRequestOptions,
   INode,
   JsonObject,
-  NodeApiError,
   NodeApiErrorOptions,
 } from 'n8n-workflow';
 
@@ -161,25 +161,8 @@ export function createGeniusReferralsNodeApiError<T extends Error = NodeApiError
 
   try {
     return new nodeApiErrorCtor(node, errorResponse, nodeApiErrorOptions);
-  } catch (nodeApiError) {
-    if (!isGetNodeError(nodeApiError)) {
-      // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Preserve unexpected constructor failures.
-      throw nodeApiError;
-    }
-
-    const apiError = toGeniusReferralsApiError(error, requestOptions);
-    apiError.name = 'NodeApiError';
-    Object.assign(apiError, {
-      context: {
-        itemIndex: options.itemIndex,
-        runIndex: options.runIndex,
-      },
-      description: nodeApiErrorOptions.description,
-      httpCode: nodeApiErrorOptions.httpCode,
-      node,
-    });
-
-    return apiError as unknown as T;
+  } catch {
+    return new NodeApiError(node, errorResponse, nodeApiErrorOptions) as unknown as T;
   }
 }
 
@@ -193,10 +176,6 @@ function asDataObject(value: unknown): IDataObject | undefined {
 
 function pickString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
-}
-
-function isGetNodeError(error: unknown): boolean {
-  return error instanceof TypeError && /getNode/.test(error.message);
 }
 
 function summarizeDetails(value: unknown): string | undefined {

@@ -1,4 +1,5 @@
-import type { IHttpRequestMethods, IHttpRequestOptions, INode, JsonObject, NodeApiError, NodeApiErrorOptions } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
+import type { IHttpRequestMethods, IHttpRequestOptions, INode, JsonObject, NodeApiErrorOptions } from 'n8n-workflow';
 export declare class GeniusReferralsApiError extends Error {
     name: string;
     readonly statusCode?: number;

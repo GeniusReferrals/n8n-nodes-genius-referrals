@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { NodeApiError } = require('n8n-workflow');
 
 const {
   GENIUS_REFERRALS_API_CREDENTIAL_TYPE,
@@ -309,7 +310,7 @@ test('createGeniusReferralsNodeApiError builds a NodeApiError-compatible object'
   assert.equal(error.errorResponse.response.data.code, 'validation_error');
 });
 
-test('createGeniusReferralsNodeApiError falls back when n8n NodeApiError requires getNode', () => {
+test('createGeniusReferralsNodeApiError falls back to a real NodeApiError', () => {
   const error = createGeniusReferralsNodeApiError(
     GetNodeSensitiveNodeApiError,
     TEST_NODE,
@@ -331,11 +332,17 @@ test('createGeniusReferralsNodeApiError falls back when n8n NodeApiError require
     },
   );
 
-  assert.equal(error instanceof GeniusReferralsApiError, true);
-  assert.equal(error.name, 'NodeApiError');
+  assert.equal(error instanceof NodeApiError, true);
+  assert.equal(error instanceof GeniusReferralsApiError, false);
+  assert.equal(error.constructor.name, 'NodeApiError');
   assert.equal(error.message, 'Invalid Genius Referrals API token');
   assert.equal(error.httpCode, '401');
-  assert.equal(error.endpoint, 'https://api.geniusreferrals.com/test-authentication');
+  assert.equal(
+    error.context.data.endpoint,
+    'https://api.geniusreferrals.com/test-authentication',
+  );
+  assert.equal(error.context.data.method, 'GET');
+  assert.equal(error.context.data.code, 'invalid_api_token');
   assert.equal(error.context.itemIndex, 0);
   assert.doesNotMatch(error.message, /getNode/);
 });

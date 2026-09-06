@@ -17,7 +17,6 @@ import {
   getGeniusReferralsApiCredentials,
   grApiRequestWithAuthentication,
   grApiRequestWithAuthenticationAsNodeApiError,
-  isGeniusReferralsApiError,
 } from '../../lib/client/GeniusReferralsApiClient';
 import {
   buildGeniusReferralsRequestDefinition,
@@ -358,11 +357,6 @@ export class GeniusReferrals implements INodeType {
             },
           });
           continue;
-        }
-
-        if (isGeniusReferralsApiError(error)) {
-          // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Avoid re-entering getNode-sensitive NodeApiError construction.
-          throw error;
         }
 
         throw toGeniusReferralsNodeApiError(node, error, { itemIndex });

@@ -315,10 +315,6 @@ class GeniusReferrals {
                     });
                     continue;
                 }
-                if ((0, GeniusReferralsApiClient_1.isGeniusReferralsApiError)(error)) {
-                    // eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- Avoid re-entering getNode-sensitive NodeApiError construction.
-                    throw error;
-                }
                 throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
             }
         }

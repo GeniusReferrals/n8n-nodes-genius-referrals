@@ -7,7 +7,6 @@ const { NodeApiError } = require('n8n-workflow');
 const {
   GENIUS_REFERRALS_API_CREDENTIAL_TYPE,
 } = require('../dist/lib/client/GeniusReferralsApiClient.js');
-const { GeniusReferralsApiError } = require('../dist/lib/errors/GeniusReferralsApiError.js');
 const { GeniusReferrals } = require('../dist/nodes/GeniusReferrals/GeniusReferrals.node.js');
 
 const TEST_NODE = {
@@ -251,11 +250,16 @@ test('n8n 2.33 AI Agent UtilitiesTestAuthentication error path does not require 
   await assert.rejects(
     () => new GeniusReferrals().execute.call(context),
     (error) => {
-      assert.equal(error instanceof GeniusReferralsApiError, true);
-      assert.equal(error.name, 'NodeApiError');
+      assert.equal(error instanceof NodeApiError, true);
+      assert.equal(error.constructor.name, 'NodeApiError');
       assert.equal(error.message, 'Invalid Genius Referrals API token');
       assert.equal(error.httpCode, '401');
-      assert.equal(error.endpoint, 'https://api.geniusreferrals.com/test-authentication');
+      assert.equal(
+        error.context.data.endpoint,
+        'https://api.geniusreferrals.com/test-authentication',
+      );
+      assert.equal(error.context.data.method, 'GET');
+      assert.equal(error.context.data.code, 'invalid_api_token');
       assert.equal(error.context.itemIndex, 0);
       assert.doesNotMatch(error.message, /getNode/);
 
@@ -263,6 +267,29 @@ test('n8n 2.33 AI Agent UtilitiesTestAuthentication error path does not require 
     },
   );
   assert.equal(requestThis, context);
+});
+
+test('execute wraps non-API runtime failures in a real NodeApiError with item index', async () => {
+  const context = createExecuteContext({
+    async httpRequestWithAuthentication() {
+      throw new Error('request should not run');
+    },
+  });
+  context.getNodeParameter = () => {
+    throw new TypeError('Unexpected parameter failure');
+  };
+
+  await assert.rejects(
+    () => new GeniusReferrals().execute.call(context),
+    (error) => {
+      assert.equal(error instanceof NodeApiError, true);
+      assert.equal(error.constructor.name, 'NodeApiError');
+      assert.equal(error.message, 'Unexpected parameter failure');
+      assert.equal(error.context.itemIndex, 0);
+
+      return true;
+    },
+  );
 });
 
 function createExecuteContext({

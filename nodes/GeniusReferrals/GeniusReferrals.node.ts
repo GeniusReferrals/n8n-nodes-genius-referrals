@@ -322,48 +322,54 @@ export class GeniusReferrals implements INodeType {
   };
 
   async execute(this: GeniusReferralsExecuteContext): Promise<INodeExecutionData[][]> {
-    const items = this.getInputData();
-    const credentials = await getGeniusReferralsApiCredentials(this);
-    const node = resolveExecutionNode(this);
-    const responseItems: INodeExecutionData[] = [];
+    let node = GENIUS_REFERRALS_EXECUTION_NODE;
 
-    for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
-      try {
-        const parameters = getNodeOperationParameters(this, itemIndex);
-        const request = buildGeniusReferralsRequestDefinition(parameters, node);
-        const response = await grApiRequestWithAuthenticationAsNodeApiError(
-          (credentialType, requestOptions) =>
-            this.helpers.httpRequestWithAuthentication.call(this, credentialType, requestOptions),
-          {
-            ...request,
-            baseUrl: credentials.baseUrl,
-          },
-          {
-            node,
-            nodeApiErrorCtor: this.nodeApiErrorCtor ?? NodeApiError,
-            nodeApiErrorOptions: { itemIndex },
-          },
-        );
+    try {
+      node = resolveExecutionNode(this);
+      const items = this.getInputData();
+      const credentials = await getGeniusReferralsApiCredentials(this);
+      const responseItems: INodeExecutionData[] = [];
 
-        responseItems.push(...toExecutionData(response, itemIndex));
-      } catch (error) {
-        if (this.continueOnFail()) {
-          responseItems.push({
-            json: {
-              error: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
+      for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+        try {
+          const parameters = getNodeOperationParameters(this, itemIndex);
+          const request = buildGeniusReferralsRequestDefinition(parameters, node);
+          const response = await grApiRequestWithAuthenticationAsNodeApiError(
+            (credentialType, requestOptions) =>
+              this.helpers.httpRequestWithAuthentication.call(this, credentialType, requestOptions),
+            {
+              ...request,
+              baseUrl: credentials.baseUrl,
             },
-            pairedItem: {
-              item: itemIndex,
+            {
+              node,
+              nodeApiErrorCtor: this.nodeApiErrorCtor ?? NodeApiError,
+              nodeApiErrorOptions: { itemIndex },
             },
-          });
-          continue;
+          );
+
+          responseItems.push(...toExecutionData(response, itemIndex));
+        } catch (error) {
+          if (this.continueOnFail()) {
+            responseItems.push({
+              json: {
+                error: error instanceof Error ? error.message : 'Unknown Genius Referrals error',
+              },
+              pairedItem: {
+                item: itemIndex,
+              },
+            });
+            continue;
+          }
+
+          throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
         }
-
-        throw toGeniusReferralsNodeApiError(node, error, { itemIndex });
       }
-    }
 
-    return [responseItems];
+      return [responseItems];
+    } catch (error) {
+      throw toGeniusReferralsNodeApiError(node, error);
+    }
   }
 
   private getNodeOperationParameters(

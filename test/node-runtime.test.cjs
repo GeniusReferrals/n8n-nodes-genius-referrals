@@ -292,6 +292,28 @@ test('execute wraps non-API runtime failures in a real NodeApiError with item in
   );
 });
 
+test('execute wraps pre-item setup failures in a real NodeApiError', async () => {
+  const context = createExecuteContext({
+    getNode: () => {
+      throw new TypeError('Execution node unavailable');
+    },
+    async httpRequestWithAuthentication() {
+      throw new Error('request should not run');
+    },
+  });
+
+  await assert.rejects(
+    () => new GeniusReferrals().execute.call(context),
+    (error) => {
+      assert.equal(error instanceof NodeApiError, true);
+      assert.equal(error.constructor.name, 'NodeApiError');
+      assert.equal(error.message, 'Execution node unavailable');
+
+      return true;
+    },
+  );
+});
+
 function createExecuteContext({
   continueOnFail = false,
   credentialBaseUrl = 'https://api.example.test',

@@ -66,8 +66,8 @@ function parseArgs(argv) {
   return options;
 }
 
-function issueCommentsPath(repository, issueNumber) {
-  return `/repos/${repository}/issues/${issueNumber}/comments?per_page=100`;
+function issueCommentsPath(repository, issueNumber, page = 1) {
+  return `/repos/${repository}/issues/${issueNumber}/comments?per_page=100&page=${page}`;
 }
 
 function parseSourceIssueNumber(packetReport) {
@@ -107,6 +107,21 @@ function githubGetJson(path, token) {
   });
 }
 
+async function listIssueComments(repository, issueNumber, token, requestJson = githubGetJson) {
+  const comments = [];
+  let page = 1;
+
+  while (true) {
+    const pageComments = await requestJson(issueCommentsPath(repository, issueNumber, page), token);
+    if (!Array.isArray(pageComments)) {
+      throw new Error(`GitHub issue comments response for ${repository}#${issueNumber} page ${page} was not an array`);
+    }
+    comments.push(...pageComments);
+    if (pageComments.length < 100) return comments;
+    page += 1;
+  }
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
@@ -119,12 +134,14 @@ async function main() {
     `/repos/${manifest.approval.repository}/issues/comments/${options.commentId}`,
     token,
   );
-  const approvalIssueComments = await githubGetJson(
-    issueCommentsPath(manifest.approval.repository, manifest.approval.issueNumber),
+  const approvalIssueComments = await listIssueComments(
+    manifest.approval.repository,
+    manifest.approval.issueNumber,
     token,
   );
-  const issueComments = await githubGetJson(
-    issueCommentsPath(manifest.approval.repository, manifest.publication.evidenceIssueNumber),
+  const issueComments = await listIssueComments(
+    manifest.approval.repository,
+    manifest.publication.evidenceIssueNumber,
     token,
   );
   const initialFreshnessReport = buildApprovalPacketFreshnessReport({
@@ -137,7 +154,7 @@ async function main() {
   });
   const sourceIssueNumber = parseSourceIssueNumber(initialFreshnessReport);
   const sourceIssueComments = sourceIssueNumber
-    ? await githubGetJson(issueCommentsPath(manifest.approval.repository, sourceIssueNumber), token)
+    ? await listIssueComments(manifest.approval.repository, sourceIssueNumber, token)
     : [];
   const freshnessReport = buildApprovalPacketFreshnessReport({
     approvalComment,
@@ -211,7 +228,14 @@ async function main() {
   console.log(`Verified production approval comment ${options.commentId}`);
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  issueCommentsPath,
+  listIssueComments,
+};

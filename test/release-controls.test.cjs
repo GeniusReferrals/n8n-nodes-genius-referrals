@@ -561,6 +561,33 @@ test('approval gate accepts tracker-scoped n8n publish approval packet', () => {
   assert.equal(summary.fields.AuthorizedActions, manifest.approval.requiredAuthorizedAction);
 });
 
+test('approval packet freshness ignores malformed historical request packets', () => {
+  const approval = approvalComment({ created_at: '2026-09-02T12:00:00Z' });
+  const malformedPacket = {
+    ...approvalPacketComment({ id: 654320, createdAt: '2026-09-01T11:00:00Z' }),
+    body: [
+      '[ProductionApprovalRequest]',
+      '[ProductionApproval]',
+      `Package=${manifest.package.name}`,
+      `Version=${manifest.package.version}`,
+      `Version=${manifest.package.version}`,
+    ].join('\n'),
+  };
+  const validPacket = approvalPacketComment({ id: 654321, createdAt: '2026-09-01T12:00:00Z' });
+
+  const report = buildApprovalPacketFreshnessReport({
+    approvalComment: approval,
+    manifest,
+    preparedRunId: '987654',
+    preparedArtifactId: '24680',
+    approvalIssueComments: [malformedPacket, validPacket],
+    publicationIssueComments: [],
+  });
+
+  assert.equal(report.stale, false);
+  assert.equal(report.affected.packetCommentId, '654321');
+});
+
 test('publication evidence includes durable release identity and registry provenance fields', () => {
   const evidence = buildPublicationEvidence({
     manifest,

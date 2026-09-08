@@ -2,6 +2,7 @@
 
 const { get } = require('node:https');
 const { resolve } = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const {
   buildApprovalPacketFreshnessReport,
@@ -74,6 +75,30 @@ function parseSourceIssueNumber(packetReport) {
   return packetReport?.affected?.sourceIssueNumber ?? null;
 }
 
+function stableReleaseAutomationCommit(currentWorkflowCommit, execute = execFileSync) {
+  try {
+    const resolved = String(execute(
+      'git',
+      [
+        'log',
+        '--no-merges',
+        '-n',
+        '1',
+        '--format=%H',
+        '--',
+        '.github/workflows/publish-n8n-node.yml',
+        'scripts',
+      ],
+      { encoding: 'utf8' },
+    )).trim();
+    if (/^[0-9a-f]{40}$/i.test(resolved)) return resolved;
+  } catch {
+    // Local callers without Git metadata retain the supplied fail-closed value.
+  }
+
+  return currentWorkflowCommit;
+}
+
 function githubGetJson(path, token) {
   return new Promise((resolvePromise, reject) => {
     get(
@@ -124,6 +149,7 @@ async function listIssueComments(repository, issueNumber, token, requestJson = g
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  const currentWorkflowCommit = stableReleaseAutomationCommit(options.currentWorkflowCommit);
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (!token) {
     throw new Error('GITHUB_TOKEN is required to verify the production approval comment');
@@ -174,7 +200,7 @@ async function main() {
       package: manifest.package,
       source: manifest.source,
       release: manifest.release,
-      currentWorkflowCommit: options.currentWorkflowCommit,
+      currentWorkflowCommit,
       preparedRunId: options.preparedRunId,
       preparedArtifactId: options.preparedArtifactId,
       approvalComment: {
@@ -208,7 +234,7 @@ async function main() {
     expectedCommentId: options.commentId,
     preparedRunId: options.preparedRunId,
     preparedArtifactId: options.preparedArtifactId,
-    currentWorkflowCommit: options.currentWorkflowCommit,
+    currentWorkflowCommit,
     issueComments,
     approvalIssueComments,
     sourceIssueComments,
@@ -220,7 +246,7 @@ async function main() {
     package: manifest.package,
     source: manifest.source,
     release: manifest.release,
-    currentWorkflowCommit: options.currentWorkflowCommit,
+    currentWorkflowCommit,
     preparedRunId: options.preparedRunId,
     preparedArtifactId: options.preparedArtifactId,
     approval: summary,
@@ -238,4 +264,5 @@ if (require.main === module) {
 module.exports = {
   issueCommentsPath,
   listIssueComments,
+  stableReleaseAutomationCommit,
 };

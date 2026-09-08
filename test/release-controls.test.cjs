@@ -120,18 +120,16 @@ function assertReleaseWorkflowCommitIsFresh({
     ...releasePaths,
   ], { cwd });
 
-  if (releaseWorkflowCommit === expectedCommit) {
-    return;
-  }
-
   const isShallow = gitOutput(['rev-parse', '--is-shallow-repository'], { cwd }) === 'true';
+  ensureGitCommitAvailable(cwd, expectedCommit);
 
   if (!isShallow) {
-    assert.equal(expectedCommit, releaseWorkflowCommit);
-    return;
+    execFileSync(
+      'git',
+      ['merge-base', '--is-ancestor', releaseWorkflowCommit, expectedCommit],
+      { cwd, stdio: 'ignore' },
+    );
   }
-
-  ensureGitCommitAvailable(cwd, expectedCommit);
 
   try {
     execFileSync(
@@ -148,6 +146,12 @@ function assertReleaseWorkflowCommitIsFresh({
     throw error;
   }
 }
+
+test('0.1.7 release manifest records the merged workflow head without changing approved artifact identity', () => {
+  assert.equal(manifest.package.version, '0.1.7');
+  assert.equal(manifest.release.finalWorkflowCommit, '61c6bcabe6003fb8b5081dee96284d1f9eb892e3');
+  assert.equal(manifest.artifact.sha256, 'd9f19a3e25bb4162b59b0ef67e0d1a5cd0b0708d9cd149b533ffabcc1a78539c');
+});
 
 test('reusable workflow does not hard-code per-release identity', () => {
   const workflow = require('node:fs').readFileSync('.github/workflows/publish-n8n-node.yml', 'utf8');

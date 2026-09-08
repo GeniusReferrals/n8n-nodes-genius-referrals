@@ -76,22 +76,39 @@ function parseSourceIssueNumber(packetReport) {
 }
 
 function stableReleaseAutomationCommit(currentWorkflowCommit, execute = execFileSync) {
+  const releasePaths = [
+    '.github/workflows/publish-n8n-node.yml',
+    'scripts',
+  ];
   try {
-    const resolved = String(execute(
+    const candidates = String(execute(
       'git',
       [
         'log',
         '--no-merges',
-        '-n',
-        '1',
         '--format=%H',
         '--',
-        '.github/workflows/publish-n8n-node.yml',
-        'scripts',
+        ...releasePaths,
       ],
       { encoding: 'utf8' },
-    )).trim();
-    if (/^[0-9a-f]{40}$/i.test(resolved)) return resolved;
+    )).trim().split(/\s+/).filter((candidate) => /^[0-9a-f]{40}$/i.test(candidate));
+
+    for (const candidate of candidates) {
+      try {
+        execute('git', ['merge-base', '--is-ancestor', candidate, 'HEAD'], { stdio: 'ignore' });
+      } catch (error) {
+        if (error?.status === 1) continue;
+        return currentWorkflowCommit;
+      }
+
+      try {
+        execute('git', ['diff', '--quiet', candidate, 'HEAD', '--', ...releasePaths], { stdio: 'ignore' });
+        return candidate;
+      } catch (error) {
+        if (error?.status === 1) continue;
+        return currentWorkflowCommit;
+      }
+    }
   } catch {
     // Local callers without Git metadata retain the supplied fail-closed value.
   }

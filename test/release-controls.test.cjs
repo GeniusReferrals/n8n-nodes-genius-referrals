@@ -149,7 +149,7 @@ function assertReleaseWorkflowCommitIsFresh({
 
 test('0.1.7 release manifest records the merged workflow head without changing approved artifact identity', () => {
   assert.equal(manifest.package.version, '0.1.7');
-  assert.equal(manifest.release.finalWorkflowCommit, '61c6bcabe6003fb8b5081dee96284d1f9eb892e3');
+  assert.equal(manifest.release.finalWorkflowCommit, 'bac35884077197cc2cb9e49875474c9da5e5f776');
   assert.equal(manifest.artifact.sha256, 'd9f19a3e25bb4162b59b0ef67e0d1a5cd0b0708d9cd149b533ffabcc1a78539c');
 });
 

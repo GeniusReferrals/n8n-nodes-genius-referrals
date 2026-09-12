@@ -2,6 +2,7 @@
 
 const { get } = require('node:https');
 const { resolve } = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const {
   buildApprovalPacketFreshnessReport,
@@ -66,12 +67,53 @@ function parseArgs(argv) {
   return options;
 }
 
-function issueCommentsPath(repository, issueNumber) {
-  return `/repos/${repository}/issues/${issueNumber}/comments?per_page=100`;
+function issueCommentsPath(repository, issueNumber, page = 1) {
+  return `/repos/${repository}/issues/${issueNumber}/comments?per_page=100&page=${page}`;
 }
 
 function parseSourceIssueNumber(packetReport) {
   return packetReport?.affected?.sourceIssueNumber ?? null;
+}
+
+function stableReleaseAutomationCommit(currentWorkflowCommit, execute = execFileSync) {
+  const releasePaths = [
+    '.github/workflows/publish-n8n-node.yml',
+    'scripts',
+  ];
+  try {
+    const candidates = String(execute(
+      'git',
+      [
+        'log',
+        '--no-merges',
+        '--format=%H',
+        '--',
+        ...releasePaths,
+      ],
+      { encoding: 'utf8' },
+    )).trim().split(/\s+/).filter((candidate) => /^[0-9a-f]{40}$/i.test(candidate));
+
+    for (const candidate of candidates) {
+      try {
+        execute('git', ['merge-base', '--is-ancestor', candidate, 'HEAD'], { stdio: 'ignore' });
+      } catch (error) {
+        if (error?.status === 1) continue;
+        return currentWorkflowCommit;
+      }
+
+      try {
+        execute('git', ['diff', '--quiet', candidate, 'HEAD', '--', ...releasePaths], { stdio: 'ignore' });
+        return candidate;
+      } catch (error) {
+        if (error?.status === 1) continue;
+        return currentWorkflowCommit;
+      }
+    }
+  } catch {
+    // Local callers without Git metadata retain the supplied fail-closed value.
+  }
+
+  return currentWorkflowCommit;
 }
 
 function githubGetJson(path, token) {
@@ -107,8 +149,24 @@ function githubGetJson(path, token) {
   });
 }
 
+async function listIssueComments(repository, issueNumber, token, requestJson = githubGetJson) {
+  const comments = [];
+  let page = 1;
+
+  while (true) {
+    const pageComments = await requestJson(issueCommentsPath(repository, issueNumber, page), token);
+    if (!Array.isArray(pageComments)) {
+      throw new Error(`GitHub issue comments response for ${repository}#${issueNumber} page ${page} was not an array`);
+    }
+    comments.push(...pageComments);
+    if (pageComments.length < 100) return comments;
+    page += 1;
+  }
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  const currentWorkflowCommit = stableReleaseAutomationCommit(options.currentWorkflowCommit);
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (!token) {
     throw new Error('GITHUB_TOKEN is required to verify the production approval comment');
@@ -119,12 +177,14 @@ async function main() {
     `/repos/${manifest.approval.repository}/issues/comments/${options.commentId}`,
     token,
   );
-  const approvalIssueComments = await githubGetJson(
-    issueCommentsPath(manifest.approval.repository, manifest.approval.issueNumber),
+  const approvalIssueComments = await listIssueComments(
+    manifest.approval.repository,
+    manifest.approval.issueNumber,
     token,
   );
-  const issueComments = await githubGetJson(
-    issueCommentsPath(manifest.approval.repository, manifest.publication.evidenceIssueNumber),
+  const issueComments = await listIssueComments(
+    manifest.approval.repository,
+    manifest.publication.evidenceIssueNumber,
     token,
   );
   const initialFreshnessReport = buildApprovalPacketFreshnessReport({
@@ -137,7 +197,7 @@ async function main() {
   });
   const sourceIssueNumber = parseSourceIssueNumber(initialFreshnessReport);
   const sourceIssueComments = sourceIssueNumber
-    ? await githubGetJson(issueCommentsPath(manifest.approval.repository, sourceIssueNumber), token)
+    ? await listIssueComments(manifest.approval.repository, sourceIssueNumber, token)
     : [];
   const freshnessReport = buildApprovalPacketFreshnessReport({
     approvalComment,
@@ -157,7 +217,7 @@ async function main() {
       package: manifest.package,
       source: manifest.source,
       release: manifest.release,
-      currentWorkflowCommit: options.currentWorkflowCommit,
+      currentWorkflowCommit,
       preparedRunId: options.preparedRunId,
       preparedArtifactId: options.preparedArtifactId,
       approvalComment: {
@@ -191,7 +251,7 @@ async function main() {
     expectedCommentId: options.commentId,
     preparedRunId: options.preparedRunId,
     preparedArtifactId: options.preparedArtifactId,
-    currentWorkflowCommit: options.currentWorkflowCommit,
+    currentWorkflowCommit,
     issueComments,
     approvalIssueComments,
     sourceIssueComments,
@@ -203,7 +263,7 @@ async function main() {
     package: manifest.package,
     source: manifest.source,
     release: manifest.release,
-    currentWorkflowCommit: options.currentWorkflowCommit,
+    currentWorkflowCommit,
     preparedRunId: options.preparedRunId,
     preparedArtifactId: options.preparedArtifactId,
     approval: summary,
@@ -211,7 +271,15 @@ async function main() {
   console.log(`Verified production approval comment ${options.commentId}`);
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  issueCommentsPath,
+  listIssueComments,
+  stableReleaseAutomationCommit,
+};

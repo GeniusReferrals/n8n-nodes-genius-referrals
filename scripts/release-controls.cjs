@@ -264,7 +264,14 @@ function approvalPacketMatchesRelease({ packetComment, manifest, preparedRunId, 
     return false;
   }
 
-  const parsed = parseStructuredFields(body);
+  let parsed;
+  try {
+    parsed = parseStructuredFields(body);
+  } catch {
+    // A malformed historical request must not prevent a later valid packet
+    // from being selected. It is simply not an eligible approval packet.
+    return false;
+  }
   const fields = parsed.fields;
 
   return (
